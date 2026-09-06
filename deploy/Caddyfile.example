@@ -1,0 +1,9 @@
+# Replace quicker.home.arpa with the hostname you resolve to the Linux server.
+# Trust Caddy's local CA on each browser/client device before using this URL.
+quicker.home.arpa {
+    tls internal
+    request_body {
+        max_size 160MB
+    }
+    reverse_proxy 127.0.0.1:8765
+}

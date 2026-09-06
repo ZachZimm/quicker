@@ -1,0 +1,16 @@
+[Unit]
+Description=Quicker document extraction worker
+After=network.target quicker.service
+
+[Service]
+Type=simple
+User=QUICKER_USER
+WorkingDirectory=QUICKER_ROOT
+EnvironmentFile=QUICKER_ROOT/.env
+ExecStart=QUICKER_ROOT/.venv/bin/python -m quicker.worker
+Restart=on-failure
+RestartSec=5
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
