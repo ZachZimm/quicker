@@ -22,6 +22,9 @@ user's request.
 - A separate visual check on each page identifies crossed-out items for
   exclusion. Ambiguous marks stay in review with a warning. Underlines, check
   marks, brackets, and nearby notes do not count as crossed-out items.
+- Auto insurance defaults to R&K Properties for property/business and the exact
+  destination account, with category Insurance (Business):Truck. Review edits
+  take precedence; generic insurer names alone do not trigger the rule.
 - Browser transaction table and source viewer, bulk assignment, required dates,
   atomic batch approval, duplicate acknowledgement, stale-edit rejection,
   reversible removal, and audit history. Changes after approval require approval
@@ -36,7 +39,7 @@ user's request.
 
 ## Verification
 
-The final local test run passed all 29 tests. The production browser build,
+The final local test run passed all 31 tests. The production browser build,
 Python lint, deployment-script syntax, and diff whitespace checks also passed.
 
 Automated checks include Python/API tests, real Chromium workflow tests at desktop
@@ -51,7 +54,7 @@ Live extraction against the supplied photos and configured local model produced:
 | --- | --- |
 | Utility bill | One expense of $214.55; payment date remains blank for review; handwritten correction ignored. |
 | Tax installment sheet | Two paid installments, $144.16 and $137.66, both dated August 10, 2026; two unpaid stubs ignored; parcel `03127109` preserved as text. |
-| Credit card statement | 14 purchases, totaling $4,178.73; the crossed-out $22.06 MHS Incline Village purchase and card payment excluded; every property left unassigned. |
+| Credit card statement | 14 purchases, totaling $4,178.73; the crossed-out $22.06 MHS Incline Village purchase and card payment excluded; the $422 auto insurance purchase assigned to R&K Properties for property and destination account, with category Insurance (Business):Truck; other card properties unassigned. |
 
 The initial verbose extraction prompt exhausted the model's available response
 budget on the card statement. A compact output contract allowed a complete

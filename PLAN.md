@@ -26,10 +26,16 @@ mapping. This document records the intended design and expands IDEA.md.
   invoice date or due date automatically.
 - Extract every credit card purchase, using its purchase date as the transaction
   date. Include refunds as positive transactions. Exclude card payments, fees,
-  and interest. Leave property assignment unset until manual review.
+  and interest. Leave property assignment unset until manual review, except for
+  the auto insurance rule below.
 - Exclude visibly crossed-out items, recording them as ignored items. Underlines,
   check marks, brackets, and adjacent notes alone do not indicate exclusion.
 - Ignore other handwriting except handwritten tax payment confirmations and dates.
+- Identified auto insurance defaults to `R&K Properties` for both property/business
+  and destination account, with category `Insurance (Business):Truck`. This is an
+  explicit exception to blank card properties and payment-year account routing.
+  Generic insurer names alone do not establish auto coverage. Review can override
+  the assignments; saving edits does not reapply the rule.
 - For tax documents, process each stub separately. Only stubs with payment
   confirmation and a paid date should create transactions. Ignore unpaid stubs.
 - Resolve parcel-to-property mappings later, using the other pages of tax
@@ -193,7 +199,8 @@ extraction accuracy or an established image-size requirement.
    preserving leading zeros. Unknown parcel mappings must remain unresolved.
 5. Present a shared review queue with source images, editable transaction fields,
    and reasons for missing or uncertain values. Credit card properties remain
-   unset until the reviewer assigns them. Use exact account/category/tag names
+   unset until the reviewer assigns them, except for identified auto insurance.
+   Use exact account/category/tag names
    from the existing Quicken file. Require a payment/transaction date on every
    row before approval. Support bulk assignment and batch approval, while
    keeping each row's destination account visible and editable.
@@ -325,7 +332,8 @@ unless the selected Quicken mechanism can verify it.
 
 Verification should cover paid versus unpaid tax stubs, the handwriting
 exception, card purchases and positive refunds with payments/fees/interest
-excluded, unset card properties, required review dates, year-based account
+excluded, unset card properties with the auto insurance exception, required
+review dates, year-based account
 defaults and overrides, bulk assignment, batch approval, removal/restoration,
 repeated uploads, interrupted entry, and exact Quicken fields.
 Compare reduced-resolution extraction against readable source documents before

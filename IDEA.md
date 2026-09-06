@@ -52,9 +52,11 @@ Parsed transactions will go through a manual review step before they are added t
 
 Every approved transaction must have a payment/transaction date. Review will support bulk assignment, batch approval, and removal/restoration of proposed transactions. Splitting a purchase across properties or categories is outside the first version.
 
-Credit card purchases use their purchase dates; refunds become positive transactions. Card payments, fees, interest, and visibly crossed-out items are ignored. Card properties remain unset until manual review. Ignore other handwriting, except that handwritten tax payment confirmations and dates determine which tax stubs are paid. Unpaid tax stubs are ignored.
+Credit card purchases use their purchase dates; refunds become positive transactions. Card payments, fees, interest, and visibly crossed-out items are ignored. Card properties remain unset until manual review, except for the auto insurance rule below. Ignore other handwriting, except that handwritten tax payment confirmations and dates determine which tax stubs are paid. Unpaid tax stubs are ignored.
 
 Keep source documents indefinitely on the server and in the Windows archive, including documents uploaded through the browser. Preserve originals and use smaller copies for model input and previews.
+
+Identified auto insurance is an exception to the default card-property and account-year rules: assign `R&K Properties` as both property/business and destination account, and `Insurance (Business):Truck` as the category. These are editable review defaults. A generic insurer name alone is insufficient to identify auto coverage.
 
 The eventual workflow should minimize the amount of interaction required after review. Ideally, once a batch has been approved, the Windows client will automate the remaining Quicken import or entry process rather than requiring the user to manually move data between applications.
 

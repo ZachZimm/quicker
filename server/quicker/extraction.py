@@ -29,6 +29,8 @@ Amounts must be decimal strings without separators. Include currency as its ISO 
 invented values. Note ambiguities in warnings. Source must identify a printed row or tax stub;
 page is its 1-based image number. Category/tag suggestions must use exact provided catalog names.
 Do not invent or correct catalog names. Do not infer properties from payee alone.
+For clearly identified auto insurance, suggest Insurance (Business):Truck if in the catalog.
+A generic insurer name alone does not establish auto coverage.
 """
 
 

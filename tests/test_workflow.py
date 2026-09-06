@@ -344,3 +344,86 @@ def test_crossed_out_items_are_ignored_but_other_rows_remain(auth, db, photo):
     assert all(item["reason"] == "Crossed-out item excluded" for item in ignored)
     assert ignored[0]["source"] == "Crossed-out MHS row"
     assert ignored[1]["source"] == "Returned purchase"
+
+
+class InsuranceAdapter(InvoiceAdapter):
+    def extract(self, images, ref):
+        return Extraction.model_validate(
+            {
+                "document_type": "credit_card",
+                "transactions": [
+                    {
+                        "kind": "purchase",
+                        "payee": payee,
+                        "category": category,
+                        "amount": "422.00",
+                        "date": "2026-07-08",
+                        "date_basis": "purchase",
+                    }
+                    for payee, category in [
+                        ("STATE FARM MUTUAL AUTOMO 800-956-6310 IL", None),
+                        ("Example insurer", "Auto & Transport:Auto Insurance"),
+                        ("STATE FARM INSURANCE 800-956-6310 IL", None),
+                        ("Auto body shop", "Repairs"),
+                    ]
+                ],
+            }
+        )
+
+
+def test_auto_insurance_defaults_use_exact_account_and_allow_review_edits(auth, db, photo):
+    from quicker.db import Setting
+
+    with db.write() as session:
+        setting = session.get(Setting, "catalog")
+        setting.value = {
+            **setting.value,
+            "accounts": setting.value["accounts"] + [{"name": "R&K Properties", "type": "Bank"}],
+            "categories": setting.value["categories"]
+            + [
+                {"name": name, "type": "expense"}
+                for name in ["Insurance (Business):Truck", "Auto & Transport:Auto Insurance"]
+            ],
+        }
+    upload(auth, photo)
+    assert process_one(db, InsuranceAdapter)
+    rows = {r["data"]["payee"]: r for r in auth.get("/api/transactions").json()}
+    for name in ["STATE FARM MUTUAL AUTOMO 800-956-6310 IL", "Example insurer"]:
+        data = rows[name]["data"]
+        assert data["property"] == data["account"] == "R&K Properties"
+        assert data["category"] == "Insurance (Business):Truck"
+        assert data["account_override"] is True
+    for name in ["STATE FARM INSURANCE 800-956-6310 IL", "Auto body shop"]:
+        assert rows[name]["data"]["property"] is None
+        assert rows[name]["data"]["account"] is None
+    row = rows["STATE FARM MUTUAL AUTOMO 800-956-6310 IL"]
+    saved = action(auth, row, "save", {**fields(row), "date": "2027-01-02"}).json()[0]
+    assert saved["data"]["account"] == "R&K Properties"
+    approved = action(auth, saved, "approve")
+    assert approved.status_code == 200, approved.text
+    edited = action(
+        auth,
+        approved.json()[0],
+        "save",
+        {
+            **fields(saved),
+            "property": "Bell St.",
+            "account": "2027 Bell St.",
+            "category": "Repairs",
+        },
+    ).json()[0]
+    assert edited["status"] == "review"
+    assert edited["data"]["property"] == "Bell St."
+    assert edited["data"]["account"] == "2027 Bell St."
+    assert edited["data"]["category"] == "Repairs"
+    assert action(auth, edited, "approve").status_code == 200
+
+
+def test_insurance_rule_does_not_substitute_year_account_if_exact_catalog_entries_missing(auth, db, photo):
+    upload(auth, photo)
+    assert process_one(db, InsuranceAdapter)
+    row = next(r for r in auth.get("/api/transactions").json() if "MUTUAL AUTOMO" in r["data"]["payee"])
+    assert row["data"]["account"] == "R&K Properties"
+    assert "Choose an existing account from the QIF catalog" in row["issues"]
+    assert "Choose an existing category from the QIF catalog" in row["issues"]
+    assert action(auth, row, "approve").status_code == 422

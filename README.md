@@ -71,7 +71,11 @@ password and invalidates browser sessions. It does not delete documents.
 5. Use the review table and source viewer to complete fields. Dates are required.
    Card purchases use purchase dates, refunds are positive, and payments, fees,
    interest, and visibly crossed-out items are ignored. Card properties are
-   always left for manual review. Other handwriting is ignored except tax payment
+   left for manual review except identified auto insurance, which defaults to
+   `R&K Properties` for both property/business and destination account, with
+   category `Insurance (Business):Truck`. This exact account overrides year-based
+   routing; all assignments remain editable. Generic insurer names alone do not
+   establish auto coverage. Other handwriting is ignored except tax payment
    confirmations and dates. Underlines, check marks, and adjacent notes alone do
    not exclude a transaction.
 6. Select rows for bulk property, account, category, or date assignment and batch

@@ -8,6 +8,7 @@ from sqlalchemy import select
 from .catalog import catalog
 from .contracts import Extraction, ReviewFields
 from .db import Audit, Candidate, Route
+from .rules import initial_assignments
 
 
 class ReviewError(ValueError):
@@ -104,7 +105,7 @@ def create_candidates(session, document_id: str, extraction: Extraction):
             document_id=document_id,
             revision=1,
             status="review",
-            data=resolve_account(session, data),
+            data=resolve_account(session, initial_assignments(data)),
             warnings=warnings,
         )
         session.add(candidate)
