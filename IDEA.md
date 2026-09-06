@@ -52,7 +52,7 @@ Parsed transactions will go through a manual review step before they are added t
 
 Every approved transaction must have a payment/transaction date. Review will support bulk assignment, batch approval, and removal/restoration of proposed transactions. Splitting a purchase across properties or categories is outside the first version.
 
-Credit card purchases use their purchase dates; refunds become positive transactions. Card payments, fees, and interest are ignored. Card properties remain unset until manual review. Ignore handwriting and cross-outs, except that handwritten tax payment confirmations and dates determine which tax stubs are paid. Unpaid tax stubs are ignored.
+Credit card purchases use their purchase dates; refunds become positive transactions. Card payments, fees, interest, and visibly crossed-out items are ignored. Card properties remain unset until manual review. Ignore other handwriting, except that handwritten tax payment confirmations and dates determine which tax stubs are paid. Unpaid tax stubs are ignored.
 
 Keep source documents indefinitely on the server and in the Windows archive, including documents uploaded through the browser. Preserve originals and use smaller copies for model input and previews.
 

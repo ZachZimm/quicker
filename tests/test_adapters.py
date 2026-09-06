@@ -68,3 +68,64 @@ def test_truncated_response_never_becomes_partial_transactions(monkeypatch):
     )
     with pytest.raises(ModelError, match="truncated"):
         VisionAdapter(ModelConfig()).complete("Read this", [b"test"])
+
+
+def test_visual_exclusion_checks_each_page_without_dropping_uncertain_rows(monkeypatch):
+    calls = []
+    replies = iter(
+        [
+            json.dumps(
+                {
+                    "document_type": "credit_card",
+                    "transactions": [
+                        {"kind": "purchase", "payee": "A", "amount": "12.34", "page": 2, "crossed_out": True},
+                        {"kind": "purchase", "payee": "B", "amount": "56.78", "page": 1},
+                        {"kind": "purchase", "payee": "C", "amount": "90.12", "page": 1},
+                    ],
+                }
+            ),
+            '{"crossed_out": [1, 2], "uncertain": [2]}',
+            '{"crossed_out": []}',
+        ]
+    )
+
+    def complete(self, prompt, images, *args):
+        calls.append(images)
+        return next(replies)
+
+    monkeypatch.setattr(VisionAdapter, "complete", complete)
+    result = VisionAdapter(ModelConfig()).extract([b"first", b"second"], {"categories": [], "tags": []})
+    assert calls == [[b"first", b"second"], [b"first"], [b"second"]]
+    assert [row.crossed_out for row in result.transactions] == [False, True, False]
+    assert "unsure" in result.transactions[2].warnings[0]
+
+
+@pytest.mark.parametrize(
+    "bad_check",
+    [
+        '{"crossed_out": [1]}',  # This row belongs to the other page.
+        '{"crossed_out": [99]}',
+        '{"crossed_out": [], "uncertain": [-1]}',
+        '{"crossed_out": [true]}',
+        "not json",
+        "```",
+    ],
+)
+def test_invalid_visual_exclusion_fails_extraction(monkeypatch, bad_check):
+    replies = iter(
+        [
+            json.dumps(
+                {
+                    "document_type": "invoice",
+                    "transactions": [
+                        {"kind": "invoice", "page": 1},
+                        {"kind": "invoice", "page": 2},
+                    ],
+                }
+            ),
+            bad_check,
+        ]
+    )
+    monkeypatch.setattr(VisionAdapter, "complete", lambda *args: next(replies))
+    with pytest.raises(ModelError, match="crossed-out item check"):
+        VisionAdapter(ModelConfig()).extract([b"first", b"second"], {"categories": [], "tags": []})

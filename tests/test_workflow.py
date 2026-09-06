@@ -296,3 +296,51 @@ def test_settings_key_is_optional_masked_and_revision_checked(auth, db):
     config["api_key"] = ""
     assert auth.put("/api/settings", json=config).status_code == 200
     assert not auth.get("/api/settings").json()["has_api_key"]
+
+
+def test_crossed_out_items_are_ignored_but_other_rows_remain(auth, db, photo):
+    class CrossedOutAdapter(InvoiceAdapter):
+        def extract(self, images, ref):
+            return Extraction.model_validate(
+                {
+                    "document_type": "credit_card",
+                    "transactions": [
+                        {
+                            "kind": "purchase",
+                            "payee": "MHS INCLINE VILLAGE",
+                            "amount": "22.06",
+                            "date": "2026-07-16",
+                            "date_basis": "purchase",
+                            "crossed_out": True,
+                            "source": "Crossed-out MHS row",
+                        },
+                        {
+                            "kind": "purchase",
+                            "payee": "Other merchant",
+                            "amount": "73.71",
+                            "date": "2026-07-16",
+                            "date_basis": "purchase",
+                        },
+                        {
+                            "kind": "refund",
+                            "payee": "Returned purchase",
+                            "amount": "10.00",
+                            "date": "2026-07-17",
+                            "date_basis": "refund",
+                            "crossed_out": True,
+                        },
+                    ],
+                }
+            )
+
+    upload(auth, photo)
+    assert process_one(db, CrossedOutAdapter)
+    rows = auth.get("/api/transactions").json()
+    assert len(rows) == 1
+    assert rows[0]["data"]["payee"] == "Other merchant"
+    assert rows[0]["data"]["property"] is None
+    ignored = auth.get("/api/documents").json()[0]["ignored"]
+    assert len(ignored) == 2
+    assert all(item["reason"] == "Crossed-out item excluded" for item in ignored)
+    assert ignored[0]["source"] == "Crossed-out MHS row"
+    assert ignored[1]["source"] == "Returned purchase"

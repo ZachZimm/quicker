@@ -47,6 +47,15 @@ def create_candidates(session, document_id: str, extraction: Extraction):
     tag_names = {c["name"] for c in ref["tags"]}
     ignored = []
     for source_index, row in enumerate(extraction.transactions):
+        if row.crossed_out:
+            ignored.append(
+                {
+                    "source": row.source or row.payee or "Crossed-out item",
+                    "reason": "Crossed-out item excluded",
+                    "page": row.page,
+                }
+            )
+            continue
         if row.kind in ("payment", "fee", "interest"):
             ignored.append({"source": row.source, "reason": f"{row.kind.title()} excluded", "page": row.page})
             continue

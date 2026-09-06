@@ -32,10 +32,11 @@ def process_one(db, adapter_factory=VisionAdapter):
         config = ModelConfig.model_validate(job.config)
         job.status, job.claim = "running", str(uuid4())
         job.attempts += 1
-        job.lease_until = now + config.timeout + 120
         session.get(Document, job.document_id).status = "extracting"
         job_id, doc_id, claim = job.id, job.document_id, job.claim
         pages = [(db.blobs / p.sha256) for p in pages_for(session, doc_id)]
+        # One transcription request plus a visual exclusion check per page.
+        job.lease_until = now + config.timeout * (1 + len(pages)) + 120
         ref = catalog(session)
     result = None
     error = None

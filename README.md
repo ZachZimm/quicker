@@ -70,8 +70,10 @@ password and invalidates browser sessions. It does not delete documents.
    rejected in full and cannot create partial transactions.
 5. Use the review table and source viewer to complete fields. Dates are required.
    Card purchases use purchase dates, refunds are positive, and payments, fees,
-   and interest are ignored. Card properties are always left for manual review.
-   Handwriting is ignored except tax payment confirmations and dates.
+   interest, and visibly crossed-out items are ignored. Card properties are
+   always left for manual review. Other handwriting is ignored except tax payment
+   confirmations and dates. Underlines, check marks, and adjacent notes alone do
+   not exclude a transaction.
 6. Select rows for bulk property, account, category, or date assignment and batch
    approval. Possible duplicates require explicit acknowledgement. Removing a row
    retains its edits and original document. Restoring returns it to review.

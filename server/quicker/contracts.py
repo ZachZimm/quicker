@@ -40,6 +40,7 @@ class ModelConfig(BaseModel):
 
 class ExtractedRow(BaseModel):
     kind: Literal["purchase", "refund", "payment", "fee", "interest", "tax", "invoice", "other"]
+    crossed_out: bool = False
     payee: str | None = None
     amount: str | None = None
     currency: str = "USD"

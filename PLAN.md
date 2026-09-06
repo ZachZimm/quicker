@@ -26,9 +26,10 @@ mapping. This document records the intended design and expands IDEA.md.
   invoice date or due date automatically.
 - Extract every credit card purchase, using its purchase date as the transaction
   date. Include refunds as positive transactions. Exclude card payments, fees,
-  and interest. Leave property assignment unset until manual review. Cross-outs
-  have no meaning.
-- Ignore handwriting except handwritten tax payment confirmations and dates.
+  and interest. Leave property assignment unset until manual review.
+- Exclude visibly crossed-out items, recording them as ignored items. Underlines,
+  check marks, brackets, and adjacent notes alone do not indicate exclusion.
+- Ignore other handwriting except handwritten tax payment confirmations and dates.
 - For tax documents, process each stub separately. Only stubs with payment
   confirmation and a paid date should create transactions. Ignore unpaid stubs.
 - Resolve parcel-to-property mappings later, using the other pages of tax
