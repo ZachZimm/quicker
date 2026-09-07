@@ -8,6 +8,7 @@ from sqlalchemy import select
 from .catalog import catalog
 from .contracts import Extraction, ReviewFields
 from .db import Audit, Candidate, Route
+from .profile import canonical_property, merchant_identity, property_from_address
 from .rules import initial_assignments
 
 
@@ -34,6 +35,7 @@ def signed_minor(value, refund=False):
 
 def resolve_account(session, data):
     result = dict(data)
+    result["property"] = canonical_property(result.get("property"))
     if not result.get("account_override"):
         route = None
         if result.get("property") and result.get("date"):
@@ -77,7 +79,7 @@ def create_candidates(session, document_id: str, extraction: Extraction):
             date=valid_date,
             category=row.category if row.category in category_names else None,
             tag=row.tag if not is_card and row.tag in tag_names else None,
-            property=None if is_card else row.property,
+            property=None if is_card or row.property_address else row.property,
             memo=row.memo,
         ).model_dump(mode="json")
         data.update(
@@ -95,17 +97,39 @@ def create_candidates(session, document_id: str, extraction: Extraction):
             matches = {
                 e["category"]
                 for e in ref["payees"] + ref["history"]
-                if e["payee"].casefold() == row.payee.casefold() and e["category"] in category_names
+                if merchant_identity(e["payee"]) == merchant_identity(row.payee)
+                and e["category"] in category_names
+                and not e.get("transfer")
+                and not e.get("opening_balance")
             }
             if len(matches) == 1:
                 data["category"] = matches.pop()
+        data = initial_assignments(data)
         warnings = list(extraction.warnings) + row.warnings
+        if row.property_address:
+            address = row.property_address.model_dump(mode="json")
+            data["property_address"] = address
+            if not is_card and not is_tax:
+                matched = property_from_address(address)
+                if matched and (not data.get("assignment_rule") or data.get("property") in (None, matched)):
+                    data["property"] = matched
+                    data["property_assignment"] = "document_address"
+                elif matched and data.get("property") != matched:
+                    warnings.append(
+                        "The document address and business rule identify different properties. Review the assignment."
+                    )
+                else:
+                    warnings.append(
+                        "The document address could not be matched to one verified property address."
+                    )
+        if data.get("assignment_warning"):
+            warnings.append(data["assignment_warning"])
         candidate = Candidate(
             id=str(uuid4()),
             document_id=document_id,
             revision=1,
             status="review",
-            data=resolve_account(session, initial_assignments(data)),
+            data=resolve_account(session, data),
             warnings=warnings,
         )
         session.add(candidate)
@@ -123,8 +147,24 @@ def duplicates(session, candidate):
         for other in session.scalars(
             select(Candidate).where(Candidate.id != candidate.id, Candidate.status != "removed")
         )
-        if (other.data.get("payee") or "").casefold() == (d.get("payee") or "").casefold()
+        if merchant_identity(other.data.get("payee")) == merchant_identity(d.get("payee"))
         and all(other.data.get(k) == d.get(k) for k in ("date", "amount_minor"))
+    ]
+
+
+def historical_duplicates(session, candidate):
+    d = candidate.data
+    if not d.get("payee") or not d.get("date") or d.get("amount_minor") is None:
+        return []
+    return [
+        {k: row.get(k) for k in ("id", "account", "payee", "date", "amount_minor", "category", "tag", "memo")}
+        for row in catalog(session)["history"]
+        if row.get("payee")
+        and not row.get("opening_balance")
+        and not row.get("transfer")
+        and merchant_identity(row["payee"]) == merchant_identity(d["payee"])
+        and row.get("amount_minor") == d["amount_minor"]
+        and row.get("date") == d["date"]
     ]
 
 
@@ -151,7 +191,9 @@ def issues(session, candidate):
         result.append("Assign the card transaction to a property or business")
     if d.get("property") and not session.scalar(select(Route).where(Route.property == d["property"])):
         result.append("Choose a configured property or business")
-    if duplicates(session, candidate) and not d.get("duplicate_acknowledged"):
+    if (duplicates(session, candidate) or historical_duplicates(session, candidate)) and not d.get(
+        "duplicate_acknowledged"
+    ):
         result.append("Review the possible duplicate and acknowledge it if this is a separate transaction")
     return result
 
@@ -180,6 +222,7 @@ def serialize(session, candidate):
         "warnings": candidate.warnings,
         "issues": issues(session, candidate),
         "duplicates": duplicates(session, candidate),
+        "historical_duplicates": historical_duplicates(session, candidate),
     }
 
 
@@ -201,6 +244,10 @@ def apply_action(session, action):
             raise ReviewError("Only removed transactions can be restored")
         if change.fields is not None:
             data = {**candidate.data, **change.fields.model_dump(mode="json")}
+            if candidate.data.get("duplicate_acknowledged") and any(
+                data.get(key) != candidate.data.get(key) for key in ("payee", "date", "amount_minor")
+            ):
+                data["duplicate_acknowledged"] = False
             candidate.data = resolve_account(session, data)
         if action.action == "remove":
             candidate.status = "removed"

@@ -30,6 +30,28 @@ import "./style.css";
 import { useDialogKeyboard } from "./accessibility";
 import { useReviewTools } from "./webmcp";
 
+function CategoryOptions({ catalog }: { catalog: Catalog }) {
+  const preferred = new Set(Object.values(catalog.preferred_categories || {}));
+  return (
+    <>
+      <optgroup label="Preferred categories">
+        {catalog.categories
+          .filter((c) => preferred.has(c.name))
+          .map((c) => (
+            <option key={c.name}>{c.name}</option>
+          ))}
+      </optgroup>
+      <optgroup label="Other Quicken categories">
+        {catalog.categories
+          .filter((c) => !preferred.has(c.name))
+          .map((c) => (
+            <option key={c.name}>{c.name}</option>
+          ))}
+      </optgroup>
+    </>
+  );
+}
+
 const EMPTY: Catalog = {
   accounts: [],
   categories: [],
@@ -439,6 +461,8 @@ function Review({
     setDraft((d) => {
       if (!d) return d;
       const data = { ...d.data, [key]: value };
+      if (["payee", "date", "amount_minor"].includes(key))
+        data.duplicate_acknowledged = false;
       if ((key === "property" || key === "date") && !data.account_override)
         data.account =
           catalog.routes.find(
@@ -520,9 +544,7 @@ function Review({
                 onChange={(e) => setBulkCategory(e.target.value)}
               >
                 <option value="">Assign category…</option>
-                {catalog.categories.map((a) => (
-                  <option key={a.name}>{a.name}</option>
-                ))}
+                <CategoryOptions catalog={catalog} />
               </select>
               <input
                 type="date"
@@ -655,7 +677,8 @@ function Review({
                           : "Ready to approve"
                         : r.status}
                     </span>
-                    {r.duplicates.length > 0 && (
+                    {(r.duplicates.length > 0 ||
+                      (r.historical_duplicates?.length || 0) > 0) && (
                       <small className="missing">Possible duplicate</small>
                     )}
                   </td>
@@ -798,6 +821,7 @@ function Review({
                   <label>
                     Property or business
                     <select
+                      aria-label="Property or business"
                       value={draft.data.property || ""}
                       onChange={(e) =>
                         update("property", e.target.value || null)
@@ -856,15 +880,14 @@ function Review({
                   <label>
                     Category
                     <select
+                      aria-label="Category"
                       value={draft.data.category || ""}
                       onChange={(e) =>
                         update("category", e.target.value || null)
                       }
                     >
                       <option value="">Choose a category</option>
-                      {catalog.categories.map((c) => (
-                        <option key={c.name}>{c.name}</option>
-                      ))}
+                      <CategoryOptions catalog={catalog} />
                     </select>
                   </label>
                   <label>
@@ -886,13 +909,51 @@ function Review({
                       onChange={(e) => update("memo", e.target.value)}
                     />
                   </label>
+                  {draft.data.property_address && (
+                    <p className="muted small">
+                      Printed address:{" "}
+                      {[
+                        draft.data.property_address.street,
+                        draft.data.property_address.city,
+                        draft.data.property_address.state,
+                      ]
+                        .filter(Boolean)
+                        .join(", ")}
+                      {" · "}
+                      {draft.data.property_address.role.replaceAll("_", " ")}
+                    </p>
+                  )}
                   {draft.data.parcel && (
                     <p className="muted">
                       Parcel {draft.data.parcel}. Choose the property manually
                       for now.
                     </p>
                   )}
-                  {draft.duplicates.length > 0 && (
+                  {(draft.historical_duplicates?.length || 0) > 0 && (
+                    <div className="historical-matches">
+                      <h4>Matching Quicken transactions</h4>
+                      <p className="muted small">
+                        These are possible duplicates in the imported history.
+                        Save edits to refresh matches.
+                      </p>
+                      {draft.historical_duplicates!.map((match) => (
+                        <div key={match.id} className="history-match">
+                          <strong>{match.account}</strong>
+                          <span>
+                            {match.date} · {match.payee} ·{" "}
+                            {money(match.amount_minor)}
+                          </span>
+                          <span>
+                            {match.category}
+                            {match.tag ? ` / ${match.tag}` : ""}
+                          </span>
+                          {match.memo && <span>{match.memo}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {(draft.duplicates.length > 0 ||
+                    (draft.historical_duplicates?.length || 0) > 0) && (
                     <label className="checkbox-label">
                       <input
                         type="checkbox"
@@ -1519,8 +1580,9 @@ function Settings({ catalog, run }: { catalog: Catalog; run: Run }) {
       <section className="panel">
         <h2>Quicken reference catalog</h2>
         <p className="muted">
-          Import a QIF export containing account and category lists. This
-          supplies exact names for review.
+          Import all accounts with Transactions, Account List, Category List and
+          Memorized payees. The history supplies duplicate checks and reference
+          examples.
         </p>
         <div className="catalog-counts">
           <span>
@@ -1556,11 +1618,77 @@ function Settings({ catalog, run }: { catalog: Catalog; run: Run }) {
           Refreshes reference data only. Existing Quicken transactions are not
           modified.
         </p>
+        {catalog.coverage && (
+          <div className="reference-coverage">
+            <h3>Imported transaction coverage</h3>
+            <p>
+              {catalog.coverage.total.toLocaleString()} transactions ·{" "}
+              {catalog.coverage.blank_payees} with blank payees retained
+            </p>
+            {(catalog.coverage.invalid_dates > 0 ||
+              catalog.coverage.invalid_amounts > 0) && (
+              <p role="alert">
+                Some reference entries have unreadable dates or amounts. Their
+                original records are retained; they cannot support exact
+                duplicate matching.
+              </p>
+            )}
+            <div className="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Account</th>
+                    <th>Transactions</th>
+                    <th>First date</th>
+                    <th>Last date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {catalog.coverage.accounts.map((a) => (
+                    <tr key={a.account}>
+                      <td>{a.account}</td>
+                      <td>{a.count || "No history"}</td>
+                      <td>{a.first_date || "—"}</td>
+                      <td>{a.last_date || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+        <h3>Property directory</h3>
+        <p className="muted small">
+          One property identity across years. Unit labels remain separate from
+          destination accounts; tags are not assigned from vendor names.
+        </p>
+        <div className="property-directory">
+          {catalog.properties?.map((p) => (
+            <div key={p.id} className="property-card">
+              <strong>{p.name}</strong>
+              {p.aliases.length > 0 && (
+                <span>Also known as: {p.aliases.join(", ")}</span>
+              )}
+              {p.units.length > 0 && <span>Units: {p.units.join(", ")}</span>}
+              {p.addresses?.map((a) => (
+                <span key={a.street}>
+                  Verified address: {a.street}, {a.city}, {a.state}
+                </span>
+              ))}
+              {p.accounts.map((a) => (
+                <span key={a.year}>
+                  {a.year}: {a.account}
+                </span>
+              ))}
+            </div>
+          ))}
+        </div>
         <h3>Property and year → account</h3>
         <p className="muted small">
-          Review the initial names derived from your accounts. Rename a property
-          here to use one consistent name across years. Parcel mapping will be
-          added later.
+          Known property aliases share a single name across years. R&K business
+          expenses use these year mappings; auto insurance uses the exact R&K
+          Properties account. Review and edit destinations here. Parcel mapping
+          will be added later.
         </p>
         <div className="route-list">
           {routes.map((r, i) => (

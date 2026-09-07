@@ -54,11 +54,14 @@ password and invalidates browser sessions. It does not delete documents.
 
 ## Use the workspace
 
-1. Import a QIF export with Account List and Category List in Settings. Importing
-   only updates Quicker's reference catalog; it never writes to Quicken.
-2. Review the property/year account mappings initially derived from account
-   names. Rename property labels to align different years as needed. Account names
-   remain exact. Mappings use payment year unless a reviewer overrides the account.
+1. Import an all-accounts QIF export with Transactions, Account List, Category List,
+   and Memorized payees in Settings. Verify the transaction count and date range
+   for each account in the coverage table. Blank-payee entries and original QIF
+   records are retained. Importing never writes to Quicken.
+2. Review the property directory and year/account mappings. Known aliases share
+   a property identity; units remain separate labels. Exact Quicken account names
+   are retained. R&K business defaults use payment year; auto insurance uses the
+   exact `R&K Properties` account. All assignments remain editable.
 3. Upload JPEG, PNG, or HEIC images. Choose whether files are separate documents
    or ordered pages of one document. Originals are retained; smaller JPEG copies
    are used for extraction and preview. Limits are 20 images, 50 MB per image,
@@ -71,15 +74,15 @@ password and invalidates browser sessions. It does not delete documents.
 5. Use the review table and source viewer to complete fields. Dates are required.
    Card purchases use purchase dates, refunds are positive, and payments, fees,
    interest, and visibly crossed-out items are ignored. Card properties are
-   left for manual review except identified auto insurance, which defaults to
-   `R&K Properties` for both property/business and destination account, with
-   category `Insurance (Business):Truck`. This exact account overrides year-based
-   routing; all assignments remain editable. Generic insurer names alone do not
-   establish auto coverage. Other handwriting is ignored except tax payment
+   left for manual review except the business rules below. Generic insurer names
+   alone do not establish auto coverage. Other handwriting is ignored except tax payment
    confirmations and dates. Underlines, check marks, and adjacent notes alone do
    not exclude a transaction.
 6. Select rows for bulk property, account, category, or date assignment and batch
-   approval. Possible duplicates require explicit acknowledgement. Removing a row
+   approval. Possible duplicates within Quicker or in imported Quicken history
+   require explicit acknowledgement. Historical matches show account, date,
+   signed amount, payee and category. A new historical match on a later import
+   returns affected approvals to review. Removing a row
    retains its edits and original document. Restoring returns it to review.
    Editing an approved transaction requires approval again.
 7. Pair the Windows companion to populate its archive, including phone uploads.
@@ -88,6 +91,55 @@ Catalog assignments from extraction are suggestions. Required dates, valid
 catalog names, exact amounts, and duplicate acknowledgement are enforced by the
 server at approval time. The model can still make reading mistakes; review the
 source before approval. No model output can initiate Quicken entry.
+
+## Address-based property assignment
+
+Bills and invoices can assign a property from a model-read service or job address.
+For utility bills, the customer address is also eligible when no conflicting
+service address is shown. The address must match a verified entry in
+`server/quicker/profile.py`; house numbers are never fuzzy-matched. Street
+abbreviations and unit suffixes are normalized, while conflicting cities or
+states prevent a match. Mailing and supplier addresses, credit card statement
+addresses, and tax stubs do not trigger this rule.
+
+`1008 Bell St, Reno, NV` is verified as **Bell St.** The original address is shown
+in review. Further verified addresses can be added to the same property directory.
+Explicit business rules take precedence and conflicting evidence is flagged.
+Assignments remain editable. The payment date is still required before the
+payment-year destination account can be selected; billing and due dates are not
+substituted.
+
+## Bookkeeping defaults
+
+The conventions for this setup live in `server/quicker/profile.py`; matching rules
+live in `server/quicker/rules.py`. Preferred categories appear first in review.
+Printed payees and source descriptions are preserved. Merchant aliases are used
+for matching, including card descriptors and the existing City Of/City 0f variants.
+
+| Recognized expense | Preferred category | Assignment |
+| --- | --- | --- |
+| Auto insurance | Insurance (Business):Truck | R&K Properties; exact R&K Properties account |
+| iCloud renewal | ICloud | R&K Properties; payment-year account |
+| HP All-In Plan | All In Plan | R&K Properties; payment-year account |
+| HP Instant Ink | Printer Plan | R&K Properties; payment-year account |
+| Sam's Club fuel | Truck Gas | R&K Properties; payment-year account |
+| The Wash Shop / Wash Shop | Truck Wash | R&K Properties; payment-year account |
+| USPS PO box renewal | P.O. Box-6 Months | R&K Properties; payment-year account |
+| USPS postage | Postage and Delivery (Business) | R&K Properties; payment-year account |
+| Explicit Spectrum Mobile/cell service | Cell Phones | R&K Properties; payment-year account |
+| TMWA | Water | Property remains for review |
+| City of Reno / City of Sparks sewer | Sewer | Property remains for review |
+| Waste Management | Garbage | Property remains for review |
+| Paid Washoe County tax stub | Property Tax | Parcel/property mapping remains for review |
+
+A Sam's Club charge without fuel details includes a confirmation warning;
+recognized membership, grocery and merchandise charges do not get that default.
+Generic Spectrum, State Farm and USPS charges remain for review when the service
+is unclear. HP All-In Plan and Instant Ink remain separate services. These rules
+run when proposals are created; saving a manual correction does not reapply them.
+Missing catalog categories or accounts prevent approval rather than substituting
+another destination. Historical records, transfers and opening balances remain
+reference data and never become new proposed transactions.
 
 ## Windows companion
 

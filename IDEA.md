@@ -52,7 +52,7 @@ Parsed transactions will go through a manual review step before they are added t
 
 Every approved transaction must have a payment/transaction date. Review will support bulk assignment, batch approval, and removal/restoration of proposed transactions. Splitting a purchase across properties or categories is outside the first version.
 
-Credit card purchases use their purchase dates; refunds become positive transactions. Card payments, fees, interest, and visibly crossed-out items are ignored. Card properties remain unset until manual review, except for the auto insurance rule below. Ignore other handwriting, except that handwritten tax payment confirmations and dates determine which tax stubs are paid. Unpaid tax stubs are ignored.
+Credit card purchases use their purchase dates; refunds become positive transactions. Card payments, fees, interest, and visibly crossed-out items are ignored. Card properties remain unset until manual review, except for the explicit business rules recorded in README.md. Ignore other handwriting, except that handwritten tax payment confirmations and dates determine which tax stubs are paid. Unpaid tax stubs are ignored.
 
 Keep source documents indefinitely on the server and in the Windows archive, including documents uploaded through the browser. Preserve originals and use smaller copies for model input and previews.
 
@@ -65,3 +65,13 @@ The precise Quicken integration method should be chosen during implementation ba
 ## Initial Goal
 
 The first version does not need to solve every kind of rental-property document or every possible Quicken workflow. Its goal is to establish a reliable path from a batch of documents to reviewed, structured transactions that can be entered into the existing Quicken data file with substantially less manual work.
+
+The full-history refinement adds a property directory, exact yearly account
+mappings, preserved QIF transaction history and historical duplicate checks.
+Recurring business expenses use preferred 2026 categories and year-specific R&K
+accounts, with the existing auto insurance exception. Rule details are in README.md.
+
+For bills and invoices, a model-read service/job address or unambiguous utility
+customer address can automatically assign a verified property. The initial
+verified address is 1008 Bell St, Reno, NV, mapped to Bell St. Payment-year account
+routing still waits for a payment date. Manual review can change the assignment.

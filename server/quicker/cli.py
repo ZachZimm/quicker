@@ -48,7 +48,16 @@ def main():
             result = import_catalog(
                 session, Path(args.path).read_text(encoding="utf-8-sig", errors="replace")
             )
-        print(json.dumps({k: len(v) for k, v in result.items()}))
+        print(
+            json.dumps(
+                {
+                    "counts": {
+                        k: len(result[k]) for k in ("accounts", "categories", "tags", "payees", "history")
+                    },
+                    "coverage": result["coverage"],
+                }
+            )
+        )
     elif args.command == "backup":
         target = Path(args.destination).resolve()
         if target.exists():

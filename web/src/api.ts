@@ -76,6 +76,27 @@ export type Catalog = {
   routes: Route[];
   payees: unknown[];
   history: unknown[];
+  coverage?: {
+    total: number;
+    blank_payees: number;
+    invalid_dates: number;
+    invalid_amounts: number;
+    accounts: {
+      account: string;
+      count: number;
+      first_date: string | null;
+      last_date: string | null;
+    }[];
+  };
+  properties?: {
+    id: string;
+    name: string;
+    aliases: string[];
+    units: string[];
+    addresses?: { street: string; city: string; state: string }[];
+    accounts: Route[];
+  }[];
+  preferred_categories?: Record<string, string>;
 };
 export type Route = { property: string; year: number; account: string };
 export type Page = { id: string; name: string; ordinal: number };
@@ -110,12 +131,29 @@ export type Transaction = {
     source: string;
     page: number;
     parcel: string | null;
+    property_address?: {
+      street: string;
+      city: string | null;
+      state: string | null;
+      role: string;
+    };
+    property_assignment?: string;
     kind: string;
     document_type: string;
   };
   issues: string[];
   warnings: string[];
   duplicates: string[];
+  historical_duplicates?: {
+    id: string;
+    account: string;
+    payee: string;
+    date: string;
+    amount_minor: number;
+    category: string;
+    tag: string;
+    memo: string;
+  }[];
 };
 export function fieldsOnly(data: Transaction["data"]): Fields {
   const {

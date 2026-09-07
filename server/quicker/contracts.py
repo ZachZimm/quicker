@@ -38,6 +38,13 @@ class ModelConfig(BaseModel):
         return f"{self.scheme}://{host}:{self.port}{self.base_path}"
 
 
+class PropertyAddress(BaseModel):
+    street: str = Field(max_length=200)
+    city: str | None = Field(default=None, max_length=100)
+    state: str | None = Field(default=None, max_length=50)
+    role: Literal["service", "job", "utility_customer", "mailing", "unknown"] = "unknown"
+
+
 class ExtractedRow(BaseModel):
     kind: Literal["purchase", "refund", "payment", "fee", "interest", "tax", "invoice", "other"]
     crossed_out: bool = False
@@ -50,6 +57,7 @@ class ExtractedRow(BaseModel):
     category: str | None = None
     tag: str | None = None
     property: str | None = None
+    property_address: PropertyAddress | None = None
     parcel: str | None = None
     memo: str = ""
     source: str = ""

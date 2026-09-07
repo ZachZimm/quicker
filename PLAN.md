@@ -139,10 +139,12 @@ Inspected local reference files:
 - `/home/zach/gold/projects/quicker/quicker-screenshot 2026-09-06 011133.png`
 - Four source document PNGs in the same directory.
 
-The export has 36 distinct account names, 161 categories, 51 tags, and 183
-memorized payee records. Its transaction section contains 41 transactions for
-`2026 Bell St.`, dated January through September 2026. It does not contain
-transaction histories for all listed accounts.
+The original export contained only 41 Bell Street transactions. The later
+`quicker-full-reference.QIF` contains 36 account names, 161 categories, 51 tags,
+183 memorized payees and 1,262 transactions across 35 registers, dated January
+2024 through September 2026. Of these, 264 transactions belong to four R&K
+accounts. The remaining Bill account has no exported register history.
+All 287 blank-payee entries are retained in the reference catalog.
 
 Accounts appear to organize records by property and year, including
 `2026 Bell St.`, `2026 Holman Way`, and `2026 Viento Way`. R&K Properties has
@@ -361,3 +363,22 @@ that the installation accepts an import or preserves its fields.
   destination during deployment. Credentials will be entered at setup time.
 - Splits, multiple human accounts, reorganization of existing transactions, and
   public internet hosting are outside the initial release.
+
+## Full-history refinement
+
+The user selected year-specific R&K destinations except for auto insurance, and
+specific 2026 categories. The implemented choices and match conditions are listed
+in README.md. Known property aliases share stable identities and exact yearly
+account mappings; Bell unit labels remain distinct from the Bell register.
+Reference import preserves dates, signed amounts and original QIF records, and
+reports per-account coverage. Historical duplicate matches require review and
+acknowledgement; reference imports can invalidate affected approvals. Merchant
+normalization supports existing spelling variations while retaining printed text.
+Interactive rule creation and a general explanation system remain deferred.
+
+Bills and invoices now extract a structured property address. A verified service,
+job or utility-customer address can set the property before review, with exact
+house-number matching and normalized street abbreviations. The initial verified
+address is 1008 Bell St, Reno, NV, mapped to Bell St. This does not supply a payment
+date or override the explicit business rules. Card mailing addresses and tax
+parcel mappings remain outside this mechanism.

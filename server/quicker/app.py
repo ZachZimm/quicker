@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 
-from .catalog import catalog, import_catalog, route_list
+from .catalog import catalog, coverage, import_catalog, route_list
 from .contracts import ModelConfig, ReviewAction
 from .db import (
     ArchiveReceipt,
@@ -33,6 +33,7 @@ from .db import (
 )
 from .documents import MAX_FILE_BYTES, ingest, model_settings, pages_for, prepare_image, serialize_page
 from .extraction import ModelError, VisionAdapter
+from .profile import PREFERRED_CATEGORIES, canonical_property, property_directory
 from .review import ReviewError, apply_action, serialize
 from .security import digest, password_hash, password_matches
 
@@ -217,7 +218,14 @@ def create_app(database=None):
     @app.get("/api/catalog")
     def get_catalog(auth: Auth):
         with db.session() as session:
-            return {**catalog(session), "routes": route_list(session)}
+            ref, routes = catalog(session), route_list(session)
+            return {
+                **ref,
+                "routes": routes,
+                "properties": property_directory(routes),
+                "coverage": ref.get("coverage") or coverage(ref),
+                "preferred_categories": PREFERRED_CATEGORIES,
+            }
 
     @app.post("/api/catalog")
     async def upload_catalog(auth: Auth, file: Annotated[UploadFile, File()]):
@@ -227,12 +235,19 @@ def create_app(database=None):
         try:
             with db.write() as session:
                 ref = import_catalog(session, content.decode("utf-8-sig", errors="replace"))
-                return {"counts": {key: len(value) for key, value in ref.items()}}
+                return {
+                    "counts": {
+                        key: len(ref[key]) for key in ("accounts", "categories", "tags", "payees", "history")
+                    },
+                    "coverage": ref["coverage"],
+                }
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from exc
 
     @app.put("/api/routes")
     def save_routes(body: list[RouteInput], auth: Auth):
+        for route in body:
+            route.property = canonical_property(route.property)
         if len({(r.property, r.year) for r in body}) != len(body):
             raise HTTPException(422, "Each property/year can have only one account")
         with db.write() as session:

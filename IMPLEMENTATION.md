@@ -15,8 +15,22 @@ user's request.
   optional API key, timeout, image size, and extraction concurrency. Chat
   completions and Responses adapters have contract tests; the selected local
   model has been exercised through chat completions.
-- QIF catalog import for exact account/category/tag names and existing payee
-  examples. Editable property/year account routes and explicit review overrides.
+- Full QIF reference history with dates, signed amounts, blank payees, stable
+  record identifiers and original records. Import coverage includes counts and
+  date ranges per account. The full local export verifies 1,262 transactions,
+  including 287 blank-payee entries, with no unreadable dates or amounts.
+- Explicit property directory with aliases, separate unit labels, exact yearly
+  destinations, preserved manual routes and audited alias migrations.
+- Preferred 2026 categories and recurring business rules with year-specific
+  R&K accounts; auto insurance keeps the exact-account exception. Rules preserve
+  printed payees, and merchant aliases support matching.
+- Historical duplicate matches across accounts, visible source details and
+  required acknowledgement. Newly discovered historical matches invalidate
+  affected approvals and stale open edits.
+- Printed service/job and utility-customer addresses can assign a verified
+  property, with address evidence shown in review. Mailing addresses, ambiguous
+  matches and card statement addresses cannot assign a property. Payment dates
+  remain mandatory, and business-rule conflicts are flagged.
 - Ordered multi-photo document uploads, immutable originals, reduced image
   previews/model inputs, upload receipts, and grouped document extraction.
 - A separate visual check on each page identifies crossed-out items for
@@ -39,7 +53,7 @@ user's request.
 
 ## Verification
 
-The final local test run passed all 31 tests. The production browser build,
+The final local test run passed all 74 tests. The production browser build,
 Python lint, deployment-script syntax, and diff whitespace checks also passed.
 
 Automated checks include Python/API tests, real Chromium workflow tests at desktop
@@ -52,9 +66,9 @@ Live extraction against the supplied photos and configured local model produced:
 
 | Sample | Result |
 | --- | --- |
-| Utility bill | One expense of $214.55; payment date remains blank for review; handwritten correction ignored. |
+| Utility bill | One expense of $214.55; the local model read 1008 Bell St, Reno, NV, which assigned Bell St.; payment date and destination account remain blank for review; handwritten correction ignored. |
 | Tax installment sheet | Two paid installments, $144.16 and $137.66, both dated August 10, 2026; two unpaid stubs ignored; parcel `03127109` preserved as text. |
-| Credit card statement | 14 purchases, totaling $4,178.73; the crossed-out $22.06 MHS Incline Village purchase and card payment excluded; the $422 auto insurance purchase assigned to R&K Properties for property and destination account, with category Insurance (Business):Truck; other card properties unassigned. |
+| Credit card statement | 14 purchases, totaling $4,178.73; the crossed-out $22.06 MHS Incline Village purchase and card payment excluded; the $422 auto insurance purchase uses the exact R&K Properties account; six additional unedited proposals now use R&K Properties 2026 with preferred categories. The remaining seven card properties are unassigned. |
 
 The initial verbose extraction prompt exhausted the model's available response
 budget on the card statement. A compact output contract allowed a complete

@@ -1152,3 +1152,38 @@ progress {
     }
   }
 }
+
+.reference-coverage {
+  margin: 1.5rem 0;
+}
+.reference-coverage .table-scroll {
+  overflow-x: auto;
+}
+.reference-coverage table {
+  width: 100%;
+  font-size: 0.85rem;
+}
+.property-directory {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+.property-card,
+.history-match {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.8rem;
+  border: 1px solid #ced4d1;
+  border-radius: 0.5rem;
+  overflow-wrap: anywhere;
+}
+.property-card span,
+.history-match span {
+  font-size: 0.85rem;
+}
+.historical-matches {
+  display: grid;
+  gap: 0.6rem;
+}

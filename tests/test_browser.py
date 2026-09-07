@@ -66,3 +66,41 @@ def test_browser_upload_review_remove_restore_and_settings(browser_url, db, phot
         page.screenshot(path=".local/qa-phone.png", full_page=True)
         assert not errors
         browser.close()
+
+
+def test_browser_reference_coverage_and_historical_duplicate_review(browser_url, auth, db, photo):
+    from quicker.catalog import import_catalog
+    from test_reference import HISTORY, SpectrumAdapter
+    from test_workflow import upload
+
+    with db.write() as session:
+        import_catalog(session, HISTORY)
+    upload(auth, photo)
+    assert process_one(db, SpectrumAdapter)
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 1440, "height": 1000})
+        page.goto(browser_url)
+        page.get_by_label("Username", exact=True).fill("admin")
+        page.get_by_label("Password", exact=True).fill("test-password-12345")
+        page.get_by_role("button", name="Sign in", exact=True).click()
+        page.get_by_role("button", name="Spectrum 855-707-7328 MO", exact=True).click()
+        expect(page.get_by_role("heading", name="Matching Quicken transactions")).to_be_visible()
+        expect(page.locator(".history-match")).to_have_count(2)
+        expect(page.locator(".historical-matches")).to_contain_text("R&K Properties 2026")
+        page.get_by_label("Property or business", exact=True).select_option("R&K Properties")
+        page.get_by_label("Category", exact=True).select_option("Internet-Reno")
+        page.get_by_role("button", name="Save & approve").click()
+        expect(page.get_by_role("dialog").get_by_role("alert")).to_contain_text("duplicate")
+        page.get_by_label("I checked the possible duplicate", exact=False).check()
+        page.get_by_role("button", name="Save & approve").click()
+        expect(page.get_by_role("dialog")).to_have_count(0)
+        page.get_by_role("button", name="Settings", exact=True).click()
+        expect(page.get_by_role("heading", name="Imported transaction coverage")).to_be_visible()
+        expect(page.locator(".reference-coverage")).to_contain_text("4 transactions")
+        expect(page.locator(".reference-coverage")).to_contain_text("1 with blank payees retained")
+        expect(page.locator(".reference-coverage")).to_contain_text("2026-05-07")
+        expect(page.locator(".property-directory")).to_contain_text("1008 Bell")
+        page.set_viewport_size({"width": 390, "height": 844})
+        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+        browser.close()
