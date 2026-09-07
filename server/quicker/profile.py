@@ -2,6 +2,25 @@
 
 import re
 
+# Verified from the property-location fields on the 2026 Washoe tax notices.
+# Notice images are reference evidence only, never imported source documents.
+WASHOE_PARCELS = {
+    "03127109": {"property": "1810 G Street", "address": "1810 G ST", "notice": "IMG_3320.HEIC"},
+    "02824308": {"property": "Grose Lane", "address": "2509 GROSE LN", "notice": "IMG_3322.HEIC"},
+    "02734118": {"property": "Holman Way", "address": "983 HOLMAN WAY", "notice": "IMG_3324.HEIC"},
+    "02734116": {"property": "Holman Circle", "address": "1007 HOLMAN CIR", "notice": "IMG_3326.HEIC"},
+    "00714311": {"property": "Bell St.", "address": "1008 BELL ST", "notice": "IMG_3328.HEIC"},
+    "00607622": {"property": "Mallard Place", "address": "840 MALLARD PL", "notice": "IMG_3330.HEIC"},
+    "02122411": {"property": "Viento Way", "address": "4325 VIENTO WAY", "notice": "IMG_3332.HEIC"},
+    "00616208": {"property": "West 6th Street", "address": "1375 W 6TH ST", "notice": "IMG_3334.HEIC"},
+}
+
+
+def washoe_property_from_parcel(parcel):
+    # Accept printed separators, but never guess missing digits or leading zeros.
+    normalized = re.sub(r"[\s-]", "", parcel or "")
+    return WASHOE_PARCELS.get(normalized, {}).get("property")
+
 PREFERRED_CATEGORIES = {
     "auto_insurance": "Insurance (Business):Truck",
     "icloud": "ICloud",

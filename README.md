@@ -5,7 +5,7 @@ card statements into reviewed transactions for Quicken. The browser is the main
 workspace; the Windows companion uploads a folder and synchronizes originals to
 a permanent archive.
 
-**Quicken entry and automatic parcel mapping are intentionally unfinished.**
+**Quicken entry is intentionally unfinished.**
 Entry buttons explain that limitation and cannot mark any transaction as entered.
 You can manually assign a property and account, edit, remove/restore, and approve
 transactions now.
@@ -130,7 +130,14 @@ for matching, including card descriptors and the existing City Of/City 0f varian
 | TMWA | Water | Property remains for review |
 | City of Reno / City of Sparks sewer | Sewer | Property remains for review |
 | Waste Management | Garbage | Property remains for review |
-| Paid Washoe County tax stub | Property Tax | Parcel/property mapping remains for review |
+| Paid Washoe County tax stub | Property Tax | Verified parcel mapping; payment-year account |
+
+Eight Washoe parcel mappings in `server/quicker/profile.py` were verified from
+the property-location fields of the 2026 tax notices, `IMG_3320.HEIC` through
+`IMG_3334.HEIC`, even-numbered files. The notice pages remain external reference
+evidence. Only the second-page receipt images are imported as source documents.
+Parcel matching preserves leading zeros, accepts spaces and hyphens, and applies
+only to Washoe County Treasurer tax rows. Unknown parcels remain for review.
 
 A Sam's Club charge without fuel details includes a confirmation warning;
 recognized membership, grocery and merchandise charges do not get that default.

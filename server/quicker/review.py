@@ -9,7 +9,7 @@ from sqlalchemy import select
 from .catalog import catalog
 from .contracts import Extraction, ReviewFields
 from .db import Audit, Candidate, Route
-from .profile import canonical_property, merchant_identity, property_from_address
+from .profile import canonical_property, merchant_identity, property_from_address, washoe_property_from_parcel
 from .rules import initial_assignments
 
 
@@ -108,6 +108,13 @@ def create_candidates(session, document_id: str, extraction: Extraction):
             if len(matches) == 1:
                 data["category"] = matches.pop()
         warnings = list(extraction.warnings) + row.warnings
+        if is_tax and merchant_identity(row.payee) == "Washoe County Treasurer":
+            matched = washoe_property_from_parcel(row.parcel)
+            if matched:
+                if data.get("property") and data["property"] != matched:
+                    warnings.append("The extracted property conflicts with the verified parcel mapping.")
+                data["property"] = matched
+                data["property_assignment"] = "verified_parcel"
         if row.property_address:
             address = row.property_address.model_dump(mode="json")
             data["property_address"] = address
