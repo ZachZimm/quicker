@@ -58,6 +58,7 @@ class ExtractedRow(BaseModel):
     tag: str | None = None
     property: str | None = None
     property_address: PropertyAddress | None = None
+    utility_account: str | None = Field(default=None, max_length=100)
     parcel: str | None = None
     memo: str = ""
     source: str = ""
@@ -80,6 +81,7 @@ class ReviewFields(BaseModel):
     category: str | None = None
     tag: str | None = None
     property: str | None = None
+    unit: str = Field(default="unresolved", max_length=100)
     account: str | None = None
     account_override: bool = False
     memo: str = Field(default="", max_length=2000)

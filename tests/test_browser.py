@@ -104,3 +104,40 @@ def test_browser_reference_coverage_and_historical_duplicate_review(browser_url,
         page.set_viewport_size({"width": 390, "height": 844})
         assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
         browser.close()
+
+
+def test_browser_rental_selection_preserves_expense_tag(browser_url, auth, db, photo):
+    from quicker.db import Setting
+    from test_units import invoice
+
+    with db.write() as session:
+        setting = session.get(Setting, 'catalog')
+        setting.value = {**setting.value, 'tags': setting.value['tags'] + [
+            {'name': '1008 Bell'}, {'name': '2 Bell'}, {'name': 'Utilities'},
+        ]}
+    invoice(auth, db, photo)
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page(viewport={'width': 390, 'height': 844})
+        page.goto(browser_url)
+        page.get_by_label('Username', exact=True).fill('admin')
+        page.get_by_label('Password', exact=True).fill('test-password-12345')
+        page.get_by_role('button', name='Sign in', exact=True).click()
+        expect(page.get_by_text('Unit unresolved', exact=True)).to_be_visible()
+        page.get_by_role('button', name='Example Energy', exact=True).click()
+        expect(page.get_by_label('Unit', exact=True)).to_have_value('unresolved')
+        expect(page.get_by_text('Printed utility account: 001-234', exact=True)).to_be_visible()
+        page.get_by_label('Unit', exact=True).select_option('2 Bell')
+        expect(page.get_by_text('Quicken tags: Utilities, 2 Bell', exact=True)).to_be_visible()
+        page.get_by_role('button', name='Save for review', exact=True).click()
+        expect(page.get_by_role('dialog')).to_have_count(0)
+        page.get_by_role('button', name='Example Energy', exact=True).click()
+        expect(page.get_by_label('Unit', exact=True)).to_have_value('2 Bell')
+        expect(page.get_by_role('combobox', name='Destination account', exact=True)).to_have_value('2026 Bell St.')
+        page.get_by_label('Unit', exact=True).select_option('whole_property')
+        expect(page.get_by_text('Quicken tags: Utilities', exact=True)).to_be_visible()
+        page.get_by_label('Property or business', exact=True).select_option('R&K Properties')
+        expect(page.get_by_label('Unit', exact=True)).to_have_value('unresolved')
+        assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
+        page.screenshot(path='.local/unit-review-phone.png', full_page=True, animations='disabled')
+        browser.close()

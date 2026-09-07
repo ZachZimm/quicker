@@ -117,6 +117,7 @@ export type Fields = {
   category: string | null;
   tag: string | null;
   property: string | null;
+  unit: string;
   account: string | null;
   account_override: boolean;
   memo: string;
@@ -138,10 +139,13 @@ export type Transaction = {
       role: string;
     };
     property_assignment?: string;
+    utility_account?: string | null;
+    unit_evidence?: string | null;
     kind: string;
     document_type: string;
   };
   issues: string[];
+  quicken_tags: string[];
   warnings: string[];
   duplicates: string[];
   historical_duplicates?: {
@@ -164,6 +168,7 @@ export function fieldsOnly(data: Transaction["data"]): Fields {
     category,
     tag,
     property,
+    unit,
     account,
     account_override,
     memo,
@@ -177,6 +182,7 @@ export function fieldsOnly(data: Transaction["data"]): Fields {
     category,
     tag,
     property,
+    unit: unit || "unresolved",
     account,
     account_override,
     memo,

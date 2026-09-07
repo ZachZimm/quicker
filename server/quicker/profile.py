@@ -15,6 +15,11 @@ WASHOE_PARCELS = {
     "00616208": {"property": "West 6th Street", "address": "1375 W 6TH ST", "notice": "IMG_3334.HEIC"},
 }
 
+# Add mappings only after bills or other records establish the rental identity.
+# Each entry needs property, unit, merchant, evidence and at least one of:
+# utility_account or address {street, city, state}. See README for matching rules.
+VERIFIED_UNIT_MAPPINGS = []
+
 
 def washoe_property_from_parcel(parcel):
     # Accept printed separators, but never guess missing digits or leading zeros.

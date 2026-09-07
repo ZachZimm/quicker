@@ -109,6 +109,44 @@ Assignments remain editable. The payment date is still required before the
 payment-year destination account can be selected; billing and due dates are not
 substituted.
 
+## Rental units and shared expenses
+
+Bell Street has one annual register for both rentals. Select `1008 Bell` or
+`2 Bell` in the review dialog's Unit field for a unit-specific expense, or
+`Whole property` for a shared expense. `Unresolved` means the available evidence
+does not identify a rental; it remains visible in the table and does not prevent
+approval. The unit never changes the payment-year account or divides the amount.
+
+Unit selection supplies the exact existing Quicken unit tag. The separate expense
+tag, such as `Utilities`, is retained. Review displays both intended Quicken tags;
+Quicken entry remains unavailable. Changing properties clears the unit assignment.
+Unit selections must belong to the chosen property, and their tags must exist in
+the imported catalog before approval. Manual selections take precedence over
+automatic suggestions.
+
+Verified parcel tax receipts default to `Whole property`. A property's main
+address alone does not select a rental. The full printed address, including any
+unit suffix, and printed utility account number are retained for review. Customer,
+premises and meter numbers are not substituted for the utility account number.
+
+`VERIFIED_UNIT_MAPPINGS` in `server/quicker/profile.py` is currently empty. The
+available NV Energy bill identifies Bell Street but does not establish its rental
+unit, and the related Quicken history has no unit tags that resolve it. Add a
+mapping only when bills or other records establish the identity. Each mapping is
+a dictionary with `property`, `unit`, `merchant`, a readable `evidence` explanation,
+and `utility_account` and/or `address`. An address has `street`, `city` and `state`.
+
+The assignment rules require the same merchant and every configured identifier.
+Account matching tolerates spaces and hyphens but preserves leading zeros. Address
+matching requires a service/job address with matching street, unit, city and state;
+a mailing or utility-customer address cannot select a rental. Conflicting verified
+matches leave the unit unresolved. These rules run only when proposals are created.
+
+The database migration adds explicit unit fields to existing rows, moves recognized
+unit tags into the unit field, and marks verified parcel taxes as whole-property
+expenses. It preserves amounts, accounts, statuses and audit history, and increments
+revisions so an already-open editor cannot overwrite the migrated row.
+
 ## Bookkeeping defaults
 
 The conventions for this setup live in `server/quicker/profile.py`; matching rules

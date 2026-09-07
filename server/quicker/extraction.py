@@ -35,6 +35,10 @@ If a utility bill shows only its customer address, use role=utility_customer. Pr
 explicit service address over a mailing address. Supplier/remittance addresses are never
 property addresses. If multiple service locations cannot be tied to individual rows,
 omit property_address and warn. Transcribe street, city and state separately; do not guess.
+Preserve any printed apartment/unit suffix in street. On utility bills, transcribe the complete
+printed utility account number as utility_account, preserving leading zeros. Do not substitute
+a customer, premises, meter, invoice or confirmation number. Omit it when ambiguous.
+Never infer a rental unit or unit tag from a property's main address or a vendor name.
 For credit card statements and tax stubs omit property_address. Do not use handwritten addresses.
 Use the provided preferred categories when the document establishes the expense type.
 For clearly identified auto insurance, suggest Insurance (Business):Truck if in the catalog.
@@ -145,6 +149,7 @@ class VisionAdapter:
                                 "category": "exact catalog name or omit",
                                 "tag": "exact catalog name or omit",
                                 "parcel": "tax parcel string or omit",
+                                "utility_account": "printed utility account number or omit",
                                 "property_address": {
                                     "street": "printed street or omit entire address",
                                     "city": "printed city or omit",

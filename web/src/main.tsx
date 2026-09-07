@@ -461,6 +461,11 @@ function Review({
     setDraft((d) => {
       if (!d) return d;
       const data = { ...d.data, [key]: value };
+      if (key === "property" && value !== d.data.property) {
+        data.unit = "unresolved";
+        data.unit_evidence = null;
+      }
+      if (key === "unit") data.unit_evidence = "Assigned during review.";
       if (["payee", "date", "amount_minor"].includes(key))
         data.duplicate_acknowledged = false;
       if ((key === "property" || key === "date") && !data.account_override)
@@ -560,7 +565,15 @@ function Review({
                 onClick={() =>
                   act("save", chosen, (r) => ({
                     ...fieldsOnly(r.data),
-                    ...(bulkProperty ? { property: bulkProperty } : {}),
+                    ...(bulkProperty
+                      ? {
+                          property: bulkProperty,
+                          unit:
+                            bulkProperty === r.data.property
+                              ? r.data.unit
+                              : "unresolved",
+                        }
+                      : {}),
                     ...(bulkDate ? { date: bulkDate } : {}),
                     ...(bulkCategory ? { category: bulkCategory } : {}),
                     ...(bulkAccount
@@ -653,6 +666,15 @@ function Review({
                       <span className="missing">Unassigned</span>
                     )}
                     <small>{r.data.account || "Choose an account"}</small>
+                    {r.data.property && (
+                      <small>
+                        {r.data.unit === "whole_property"
+                          ? "Whole property"
+                          : r.data.unit === "unresolved" || !r.data.unit
+                            ? "Unit unresolved"
+                            : r.data.unit}
+                      </small>
+                    )}
                   </td>
                   <td>
                     {r.data.category || (
@@ -834,6 +856,37 @@ function Review({
                     </select>
                   </label>
                   <label>
+                    Unit
+                    <select
+                      aria-label="Unit"
+                      value={draft.data.unit || "unresolved"}
+                      disabled={!draft.data.property}
+                      onChange={(e) => update("unit", e.target.value)}
+                    >
+                      <option value="unresolved">Unresolved</option>
+                      <option value="whole_property">Whole property</option>
+                      {(
+                        catalog.properties?.find(
+                          (p) => p.name === draft.data.property,
+                        )?.units || []
+                      ).map((unit) => (
+                        <option key={unit} value={unit}>
+                          {unit}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <p className="muted small">
+                    Unit selection keeps the same property account. Choose Whole
+                    property for a shared expense; leave Unresolved when the
+                    bill does not identify a rental.
+                  </p>
+                  {draft.data.unit_evidence && (
+                    <p className="muted small">
+                      Unit evidence: {draft.data.unit_evidence}
+                    </p>
+                  )}
+                  <label>
                     Destination account
                     <select
                       value={draft.data.account || ""}
@@ -891,17 +944,37 @@ function Review({
                     </select>
                   </label>
                   <label>
-                    Tag · optional
+                    Expense tag · optional
                     <select
                       value={draft.data.tag || ""}
                       onChange={(e) => update("tag", e.target.value || null)}
                     >
                       <option value="">No tag</option>
-                      {catalog.tags.map((t) => (
-                        <option key={t.name}>{t.name}</option>
-                      ))}
+                      {catalog.tags
+                        .filter(
+                          (t) =>
+                            !catalog.properties?.some((p) =>
+                              p.units.includes(t.name),
+                            ),
+                        )
+                        .map((t) => (
+                          <option key={t.name}>{t.name}</option>
+                        ))}
                     </select>
                   </label>
+                  <p className="muted small">
+                    Quicken tags:{" "}
+                    {[
+                      draft.data.tag,
+                      ...(catalog.properties
+                        ?.find((p) => p.name === draft.data.property)
+                        ?.units.includes(draft.data.unit)
+                        ? [draft.data.unit]
+                        : []),
+                    ]
+                      .filter(Boolean)
+                      .join(", ") || "None"}
+                  </p>
                   <label>
                     Memo
                     <textarea
@@ -925,8 +998,15 @@ function Review({
                   )}
                   {draft.data.parcel && (
                     <p className="muted">
-                      Parcel {draft.data.parcel}. Choose the property manually
-                      for now.
+                      Parcel {draft.data.parcel}.
+                      {draft.data.property_assignment === "verified_parcel"
+                        ? " Property matched from the verified parcel mapping."
+                        : " Choose the property during review."}
+                    </p>
+                  )}
+                  {draft.data.utility_account && (
+                    <p className="muted small">
+                      Printed utility account: {draft.data.utility_account}
                     </p>
                   )}
                   {(draft.historical_duplicates?.length || 0) > 0 && (

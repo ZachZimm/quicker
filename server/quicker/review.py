@@ -11,6 +11,7 @@ from .contracts import Extraction, ReviewFields
 from .db import Audit, Candidate, Route
 from .profile import canonical_property, merchant_identity, property_from_address, washoe_property_from_parcel
 from .rules import initial_assignments
+from .units import initial_unit_assignment, property_units, quicken_tags, validate_unit
 
 
 class ReviewError(ValueError):
@@ -89,6 +90,7 @@ def create_candidates(session, document_id: str, extraction: Extraction):
                 "kind": row.kind,
                 "document_type": extraction.document_type,
                 "parcel": row.parcel,
+                "utility_account": row.utility_account,
                 "source": row.source,
                 "page": row.page,
             }
@@ -133,6 +135,7 @@ def create_candidates(session, document_id: str, extraction: Extraction):
                     )
         if data.get("assignment_warning"):
             warnings.append(data["assignment_warning"])
+        data = initial_unit_assignment(data)
         candidate = Candidate(
             id=str(uuid4()),
             document_id=document_id,
@@ -210,6 +213,11 @@ def issues(session, candidate):
     d = candidate.data
     ref = catalog(session)
     result = []
+    unit_issue = validate_unit(d)
+    if unit_issue:
+        result.append(unit_issue)
+    if any(tag not in {r["name"] for r in ref["tags"]} for tag in quicken_tags(d)):
+        result.append("Choose existing Quicken tags for this rental and expense")
     for key, label in (
         ("payee", "Payee"),
         ("date", "Payment / transaction date"),
@@ -257,6 +265,7 @@ def serialize(session, candidate):
         "id": candidate.id,
         "document_id": candidate.document_id,
         **snapshot(candidate),
+        "quicken_tags": quicken_tags(candidate.data),
         "warnings": candidate.warnings,
         "issues": issues(session, candidate),
         "duplicates": duplicates(session, candidate),
@@ -281,7 +290,25 @@ def apply_action(session, action):
         if action.action == "restore" and candidate.status != "removed":
             raise ReviewError("Only removed transactions can be restored")
         if change.fields is not None:
-            data = {**candidate.data, **change.fields.model_dump(mode="json")}
+            # Older clients omit unit. Preserve it unless the property changes.
+            fields = change.fields.model_dump(mode="json")
+            if "unit" not in change.fields.model_fields_set:
+                fields["unit"] = candidate.data.get("unit", "unresolved")
+            data = {**candidate.data, **fields}
+            data["property"] = canonical_property(data.get("property"))
+            if data.get("property") != canonical_property(candidate.data.get("property")):
+                if "unit" not in change.fields.model_fields_set or data["unit"] not in [
+                    "unresolved",
+                    "whole_property",
+                    *property_units(data.get("property")),
+                ]:
+                    data["unit"] = "unresolved"
+                data["unit_evidence"] = None if data["unit"] == "unresolved" else "Assigned during review."
+            elif data.get("unit") != candidate.data.get("unit", "unresolved"):
+                data["unit_evidence"] = "Assigned during review."
+            unit_issue = validate_unit(data)
+            if unit_issue:
+                raise ReviewError(unit_issue)
             if candidate.data.get("duplicate_acknowledged") and any(
                 data.get(key) != candidate.data.get(key) for key in ("payee", "date", "amount_minor")
             ):
