@@ -8,7 +8,7 @@ from decimal import Decimal, InvalidOperation
 
 from sqlalchemy import select
 
-from .db import Candidate, Route, Setting
+from .db import Route, Setting
 from .profile import canonical_property, merchant_identity
 
 TRANSACTION_SECTIONS = {
@@ -173,12 +173,13 @@ def import_catalog(session, content):
             session.flush()
     counts = Counter((r["property"], r["year"]) for r in inferred_routes(ref))
     for route in inferred_routes(ref):
+        if session.get(Route, (route["property"], route["year"])) is not None:
+            continue
         if counts[(route["property"], route["year"])] > 1:
             raise ValueError(
                 f"Multiple accounts for {route['property']} in {route['year']}; an explicit mapping is needed"
             )
-        if session.get(Route, (route["property"], route["year"])) is None:
-            session.add(Route(**route))
+        session.add(Route(**route))
     current = session.get(Setting, "catalog")
     if current:
         current.value = ref
@@ -186,40 +187,9 @@ def import_catalog(session, content):
         session.add(Setting(key="catalog", value=ref))
     session.flush()
     if previous.get("digest") != ref["digest"]:
-        from .review import audit, resolve_account
+        from .review import reconcile_reference
 
-        def matches(reference, data):
-            return Counter(
-                row["account"]
-                for row in reference["history"]
-                if data.get("payee")
-                and data.get("date")
-                and data.get("amount_minor") is not None
-                and row.get("payee")
-                and not row.get("opening_balance")
-                and not row.get("transfer")
-                and merchant_identity(row["payee"]) == merchant_identity(data["payee"])
-                and row.get("date") == data["date"]
-                and row.get("amount_minor") == data["amount_minor"]
-            )
-
-        for candidate in session.scalars(
-            select(Candidate).where(Candidate.status.in_(["review", "approved"]))
-        ):
-            new_matches = matches(ref, candidate.data)
-            renamed = canonical_property(candidate.data.get("property")) != candidate.data.get("property")
-            changed_matches = new_matches and new_matches != matches(previous, candidate.data)
-            if renamed or changed_matches:
-                candidate.data = resolve_account(session, candidate.data) if renamed else dict(candidate.data)
-                if changed_matches:
-                    candidate.data = {**candidate.data, "duplicate_acknowledged": False}
-                candidate.status = "review"
-                candidate.revision += 1
-                audit(
-                    session,
-                    candidate,
-                    "reference_matches_changed" if changed_matches else "property_alias_migrated",
-                )
+        reconcile_reference(session, previous, ref)
     session.flush()
     return ref
 

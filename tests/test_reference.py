@@ -237,3 +237,94 @@ def test_explicit_umbrella_policy_is_not_overridden_by_conflicting_old_category(
         }
     )
     assert not data.get("assignment_rule") and data["property"] is None
+
+
+def test_history_category_does_not_establish_auto_coverage(auth, db, photo):
+    insurance_qif = HISTORY.replace("Internet-Reno", "Insurance (Business):Truck").replace(
+        "PSpectrum", "PState Farm Insurance"
+    )
+    with db.write() as s:
+        import_catalog(s, insurance_qif)
+
+    class InsuranceAdapter(InvoiceAdapter):
+        def extract(self, images, ref):
+            return Extraction.model_validate(
+                {
+                    "document_type": "credit_card",
+                    "transactions": [
+                        {
+                            "kind": "purchase",
+                            "payee": "State Farm Insurance",
+                            "amount": "75.00",
+                            "date": "2026-05-07",
+                            "date_basis": "purchase",
+                        }
+                    ],
+                }
+            )
+
+    upload(auth, photo)
+    assert process_one(db, InsuranceAdapter)
+    row = auth.get("/api/transactions").json()[0]
+    assert row["data"]["category"] == "Insurance (Business):Truck"
+    assert row["data"]["property"] is None
+    assert row["data"]["account"] is None
+    assert not row["data"]["account_override"]
+    assert not row["data"].get("assignment_rule")
+
+
+def test_existing_mapping_resolves_alias_collision(db):
+    from quicker.db import Route
+
+    qif = "!Account\nN2026 Bell St.\nTBank\n^\nN2026 Bell;One Half\nTBank\n^\n"
+    with db.write() as s:
+        # Use a deliberate choice other than the first account in the export.
+        s.get(Route, ("Bell St.", 2026)).account = "2026 Bell;One Half"
+        ref = import_catalog(s, qif)
+        assert len(ref["accounts"]) == 2
+        assert s.get(Route, ("Bell St.", 2026)).account == "2026 Bell;One Half"
+
+
+def test_unmapped_alias_collision_still_requires_explicit_mapping(db):
+    qif = "!Account\nN2028 Bell St.\nTBank\n^\nN2028 Bell;One Half\nTBank\n^\n"
+    with pytest.raises(ValueError, match="explicit mapping"), db.write() as s:
+        import_catalog(s, qif)
+
+
+def test_removed_row_requires_acknowledgement_of_new_history(auth, db, photo):
+    with db.write() as s:
+        import_catalog(s, HISTORY)
+    upload(auth, photo)
+    assert process_one(db, SpectrumAdapter)
+    row = auth.get("/api/transactions").json()[0]
+    edit = {
+        **fields(row),
+        "property": "R&K Properties",
+        "category": "Internet-Reno",
+        "duplicate_acknowledged": True,
+    }
+    approved = action(auth, row, "approve", edit).json()[0]
+    removed = action(auth, approved, "remove").json()[0]
+    with db.write() as s:
+        import_catalog(
+            s, HISTORY.replace("!Type:Cat", "D5/ 7'26\nT-50.00\nPSpectrum\nLInternet-Reno\n^\n!Type:Cat")
+        )
+    updated = next(r for r in auth.get("/api/transactions").json() if r["id"] == removed["id"])
+    assert updated["status"] == "removed"
+    assert not updated["data"]["duplicate_acknowledged"]
+    assert updated["revision"] == removed["revision"] + 1
+    assert action(auth, removed, "restore").status_code == 409
+    restored = action(auth, updated, "restore").json()[0]
+    assert action(auth, restored, "approve").status_code == 422
+    assert (
+        action(
+            auth,
+            restored,
+            "approve",
+            {
+                **fields(restored),
+                "duplicate_acknowledged": True,
+            },
+        ).status_code
+        == 200
+    )

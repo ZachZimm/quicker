@@ -1,3 +1,4 @@
+from collections import Counter
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from time import time
@@ -92,6 +93,8 @@ def create_candidates(session, document_id: str, extraction: Extraction):
                 "page": row.page,
             }
         )
+        # Business rules use document evidence before historical category suggestions.
+        data = initial_assignments(data)
         # Only an unambiguous existing payee category is eligible as a fallback suggestion.
         if not data["category"] and row.payee:
             matches = {
@@ -104,7 +107,6 @@ def create_candidates(session, document_id: str, extraction: Extraction):
             }
             if len(matches) == 1:
                 data["category"] = matches.pop()
-        data = initial_assignments(data)
         warnings = list(extraction.warnings) + row.warnings
         if row.property_address:
             address = row.property_address.model_dump(mode="json")
@@ -152,20 +154,49 @@ def duplicates(session, candidate):
     ]
 
 
-def historical_duplicates(session, candidate):
-    d = candidate.data
-    if not d.get("payee") or not d.get("date") or d.get("amount_minor") is None:
+def historical_matches(reference, data):
+    if not data.get("payee") or not data.get("date") or data.get("amount_minor") is None:
         return []
+    merchant = merchant_identity(data["payee"])
     return [
-        {k: row.get(k) for k in ("id", "account", "payee", "date", "amount_minor", "category", "tag", "memo")}
-        for row in catalog(session)["history"]
+        row
+        for row in reference["history"]
         if row.get("payee")
         and not row.get("opening_balance")
         and not row.get("transfer")
-        and merchant_identity(row["payee"]) == merchant_identity(d["payee"])
-        and row.get("amount_minor") == d["amount_minor"]
-        and row.get("date") == d["date"]
+        and merchant_identity(row["payee"]) == merchant
+        and row.get("amount_minor") == data["amount_minor"]
+        and row.get("date") == data["date"]
     ]
+
+
+def historical_duplicates(session, candidate):
+    return [
+        {k: row.get(k) for k in ("id", "account", "payee", "date", "amount_minor", "category", "tag", "memo")}
+        for row in historical_matches(catalog(session), candidate.data)
+    ]
+
+
+def reconcile_reference(session, previous, current):
+    """Reconcile review state inside the reference import's database transaction."""
+    for candidate in session.scalars(
+        select(Candidate).where(Candidate.status.in_(["review", "approved", "removed"]))
+    ):
+        new_matches = Counter(row["account"] for row in historical_matches(current, candidate.data))
+        old_matches = Counter(row["account"] for row in historical_matches(previous, candidate.data))
+        changed_matches = new_matches and new_matches != old_matches
+        renamed = canonical_property(candidate.data.get("property")) != candidate.data.get("property")
+        if not renamed and not changed_matches:
+            continue
+        candidate.data = resolve_account(session, candidate.data) if renamed else dict(candidate.data)
+        if changed_matches:
+            candidate.data = {**candidate.data, "duplicate_acknowledged": False}
+        if candidate.status != "removed":
+            candidate.status = "review"
+        candidate.revision += 1
+        audit(
+            session, candidate, "reference_matches_changed" if changed_matches else "property_alias_migrated"
+        )
 
 
 def issues(session, candidate):
