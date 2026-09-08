@@ -125,6 +125,19 @@ samples; the saved workspace now uses that protocol and setting. This does not
 change the model server's global settings. The protocol remains selectable, and
 other models can keep their default reasoning mode.
 
+## Next Windows milestone
+
+Automate creation of fresh, complete exports from the actual Quicken data file.
+The current passive file watcher does not create exports. The user requires
+synchronization to include transactions entered outside Quicker. Pre-entry
+export, duplicate revalidation and post-entry export/reconciliation are required;
+appending Quicker transactions to an old export is not sufficient.
+
+Implement export-event freshness alongside the desktop adapter, including fresh
+exports whose contents are unchanged. Then implement entry claims and recovery.
+[WINDOWS_HANDOFF.md](WINDOWS_HANDOFF.md) records the concrete sequence and tests
+for the Windows task. No Windows export or entry automation is claimed complete.
+
 ## Deliberately unfinished or not verified here
 
 - Some physical rental-to-Quicken-tag mappings remain unresolved, including the

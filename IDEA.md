@@ -75,3 +75,12 @@ For bills and invoices, a model-read service/job address or unambiguous utility
 customer address can automatically assign a verified property. The initial
 verified address is 1008 Bell St, Reno, NV, mapped to Bell St. Payment-year account
 routing still waits for a payment date. Manual review can change the assignment.
+
+## Authoritative Quicken synchronization
+
+The Windows companion must create fresh exports directly from Quicken, including
+transactions entered manually or by other tools. It must refresh the server's
+reference before entry and export again afterward to verify results. Updating an
+old export with only Quicker's own transactions does not satisfy synchronization.
+Automated export creation is the first milestone of the Windows implementation;
+see WINDOWS_HANDOFF.md for the workflow and acceptance checks.

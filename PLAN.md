@@ -7,6 +7,21 @@ The first implementation is now available. See IMPLEMENTATION.md for completed
 work, verification, and the user-approved deferral of Quicken entry and parcel
 mapping. This document records the intended design and expands IDEA.md.
 
+## Windows automation refinement
+
+Fresh exports created directly in Quicken are required as part of Windows-side
+automation. Quicken remains authoritative even when transactions originate outside
+Quicker. Refresh the server reference before every entry run, recheck duplicate
+matches before claiming work, and export again afterward for reconciliation.
+Never simulate synchronization by appending Quicker transactions to a one-time
+export. Provide refresh without entry and idle background refresh that respects
+use of the Windows desktop.
+
+Export creation and its freshness-event contract are the first Windows milestone.
+The current passive watcher is a fallback, not the completed automation. See
+[WINDOWS_HANDOFF.md](WINDOWS_HANDOFF.md) for the implementation sequence, existing
+modules, concurrency requirements and acceptance checks.
+
 ## Confirmed requirements
 
 - Add new transactions to Quicken Classic Business & Personal on a separate

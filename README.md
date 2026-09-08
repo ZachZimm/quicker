@@ -105,8 +105,11 @@ source before approval. No model output can initiate Quicken entry.
 
 The companion watches the selected QIF file for stable changes, uploads exact
 bytes, verifies the server receipt and retains the local export. It does not
-create exports inside Quicken. Export all accounts and all dates to that file
-regularly, especially before preparing another batch for entry.
+create exports inside Quicken yet. Automated fresh export creation is required
+for the Windows implementation, before entry and again afterward for verification.
+It must include changes made outside Quicker. Until that is implemented, export
+all accounts and all dates manually to the watched file. See
+[WINDOWS_HANDOFF.md](WINDOWS_HANDOFF.md) for the next implementation task.
 
 Settings lists each distinct received version, its transaction coverage and a
 backup download. The CLI `import-qif` command uses the same versioned storage.
