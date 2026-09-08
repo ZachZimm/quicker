@@ -52,6 +52,15 @@ def create_candidates(session, document_id: str, extraction: Extraction):
     tag_names = {c["name"] for c in ref["tags"]}
     ignored = []
     for source_index, row in enumerate(extraction.transactions):
+        if extraction.document_type == "utility" and row.amount_basis in {
+            "statement_total",
+            "component",
+            "illustration",
+        }:
+            ignored.append(
+                {"source": row.source, "reason": f"Utility {row.amount_basis} excluded", "page": row.page}
+            )
+            continue
         if row.crossed_out:
             ignored.append(
                 {
@@ -91,6 +100,12 @@ def create_candidates(session, document_id: str, extraction: Extraction):
                 "document_type": extraction.document_type,
                 "parcel": row.parcel,
                 "utility_account": row.utility_account,
+                "service_customer_id": row.service_customer_id,
+                "billing_customer_id": row.billing_customer_id,
+                "invoice_number": row.invoice_number,
+                "invoice_date": row.invoice_date.isoformat() if row.invoice_date else None,
+                "service_period": row.service_period,
+                "amount_basis": row.amount_basis,
                 "source": row.source,
                 "page": row.page,
             }

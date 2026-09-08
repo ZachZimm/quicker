@@ -140,6 +140,12 @@ export type Transaction = {
     };
     property_assignment?: string;
     utility_account?: string | null;
+    service_customer_id?: string | null;
+    billing_customer_id?: string | null;
+    invoice_number?: string | null;
+    invoice_date?: string | null;
+    service_period?: string | null;
+    amount_basis?: string;
     unit_evidence?: string | null;
     kind: string;
     document_type: string;

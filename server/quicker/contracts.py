@@ -59,6 +59,14 @@ class ExtractedRow(BaseModel):
     property: str | None = None
     property_address: PropertyAddress | None = None
     utility_account: str | None = Field(default=None, max_length=100)
+    service_customer_id: str | None = Field(default=None, max_length=100)
+    billing_customer_id: str | None = Field(default=None, max_length=100)
+    invoice_number: str | None = Field(default=None, max_length=100)
+    invoice_date: CalendarDate | None = None
+    service_period: str | None = Field(default=None, max_length=100)
+    amount_basis: Literal[
+        "unknown", "service_location_total", "current_charges", "statement_total", "component", "illustration"
+    ] = "unknown"
     parcel: str | None = None
     memo: str = ""
     source: str = ""
@@ -67,7 +75,7 @@ class ExtractedRow(BaseModel):
 
 
 class Extraction(BaseModel):
-    document_type: Literal["credit_card", "tax", "invoice", "other"]
+    document_type: Literal["credit_card", "tax", "invoice", "utility", "other"]
     transactions: list[ExtractedRow] = Field(default_factory=list, max_length=200)
     warnings: list[str] = Field(default_factory=list)
 

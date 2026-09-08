@@ -17,14 +17,73 @@ WASHOE_PARCELS = {
 
 # Add mappings only after bills or other records establish the rental identity.
 # Each entry needs property, unit, merchant, evidence and at least one of:
-# utility_account or address {street, city, state}. See README for matching rules.
-VERIFIED_UNIT_MAPPINGS = []
+# utility_account, service_customer_id or address {street, city, state}.
+# These service IDs come from IMG_3338-3341, not the bill's header customer ID.
+VERIFIED_UNIT_MAPPINGS = [
+    {
+        "property": "Holman Way",
+        "unit": "Holman 85",
+        "merchant": "Waste Management",
+        "service_customer_id": "6-16273-15001",
+        "evidence": "WM IMG_3338: service location 985 Holman Way.",
+    },
+    {
+        "property": "Holman Way",
+        "unit": "Holman 83",
+        "merchant": "Waste Management",
+        "service_customer_id": "6-16761-55001",
+        "evidence": "WM IMG_3339: service location 983 Holman Way.",
+    },
+    {
+        "property": "Holman Circle",
+        "unit": "Holman 07",
+        "merchant": "Waste Management",
+        "service_customer_id": "6-16787-55001",
+        "evidence": "WM IMG_3339: service location 1007 Holman Cir.",
+    },
+    {
+        "property": "Holman Circle",
+        "unit": "Holman 09",
+        "merchant": "Waste Management",
+        "service_customer_id": "6-16953-65007",
+        "evidence": "WM IMG_3339: service location 1009 Holman Cir.",
+    },
+    {
+        "property": "West 6th Street",
+        "unit": "1375-75",
+        "merchant": "Waste Management",
+        "service_customer_id": "6-37085-65004",
+        "evidence": "WM IMG_3340/3341: service location 1375 W 6th St.",
+    },
+    {
+        "property": "West 6th Street",
+        "unit": "1375-77",
+        "merchant": "Waste Management",
+        "service_customer_id": "6-37085-75002",
+        "evidence": "WM IMG_3340/3341: service location 1377 W 6th St.",
+    },
+    {
+        "property": "Bell St.",
+        "unit": "unresolved",
+        "merchant": "Waste Management",
+        "service_customer_id": "6-36357-95001",
+        "evidence": "WM IMG_3340/3341 identifies 1008 Bell St. Confirm the Quicken unit tag; historical charges do not establish the mapping.",
+    },
+    {
+        "property": "Bell St.",
+        "unit": "unresolved",
+        "merchant": "Waste Management",
+        "service_customer_id": "6-36462-05002",
+        "evidence": "WM IMG_3340/3341 identifies 1008 Bell St #1/2. Confirm the Quicken unit tag; historical charges do not establish the mapping.",
+    },
+]
 
 
 def washoe_property_from_parcel(parcel):
     # Accept printed separators, but never guess missing digits or leading zeros.
     normalized = re.sub(r"[\s-]", "", parcel or "")
     return WASHOE_PARCELS.get(normalized, {}).get("property")
+
 
 PREFERRED_CATEGORIES = {
     "auto_insurance": "Insurance (Business):Truck",
@@ -50,14 +109,54 @@ PROPERTIES = [
         "units": ["1008 Bell", "2 Bell"],
         "addresses": [{"street": "1008 Bell St", "city": "Reno", "state": "NV"}],
     },
-    {"id": "g_street", "name": "1810 G Street", "aliases": ["G Street"], "units": ["G Street"]},
-    {"id": "grose", "name": "Grose Lane", "aliases": ["Grose"], "units": []},
-    {"id": "holman_circle", "name": "Holman Circle", "aliases": [], "units": ["Holman 07", "Holman 09"]},
-    {"id": "holman_way", "name": "Holman Way", "aliases": [], "units": ["Holman 83", "Holman 85"]},
-    {"id": "mallard", "name": "Mallard Place", "aliases": ["Mallard"], "units": []},
+    {
+        "id": "g_street",
+        "addresses": [{"street": "1810 G St", "city": "Sparks", "state": "NV"}],
+        "name": "1810 G Street",
+        "aliases": ["G Street"],
+        "units": ["G Street"],
+    },
+    {
+        "id": "grose",
+        "addresses": [{"street": "2509 Grose Ln", "city": "Sparks", "state": "NV"}],
+        "name": "Grose Lane",
+        "aliases": ["Grose"],
+        "units": [],
+    },
+    {
+        "id": "holman_circle",
+        "addresses": [
+            {"street": "1007 Holman Cir", "city": "Sparks", "state": "NV"},
+            {"street": "1009 Holman Cir", "city": "Sparks", "state": "NV"},
+        ],
+        "name": "Holman Circle",
+        "aliases": [],
+        "units": ["Holman 07", "Holman 09"],
+    },
+    {
+        "id": "holman_way",
+        "addresses": [
+            {"street": "983 Holman Way", "city": "Sparks", "state": "NV"},
+            {"street": "985 Holman Way", "city": "Sparks", "state": "NV"},
+        ],
+        "name": "Holman Way",
+        "aliases": [],
+        "units": ["Holman 83", "Holman 85"],
+    },
+    {
+        "id": "mallard",
+        "addresses": [{"street": "840 Mallard Pl", "city": "Reno", "state": "NV"}],
+        "name": "Mallard Place",
+        "aliases": ["Mallard"],
+        "units": [],
+    },
     {"id": "viento", "name": "Viento Way", "aliases": ["Viento"], "units": []},
     {
         "id": "west_sixth",
+        "addresses": [
+            {"street": "1375 W 6th St", "city": "Reno", "state": "NV"},
+            {"street": "1377 W 6th St", "city": "Reno", "state": "NV"},
+        ],
         "name": "West 6th Street",
         "aliases": ["West Sixth Street"],
         "units": ["1375-75", "1375-77"],
@@ -93,7 +192,7 @@ def merchant_identity(name):
         (r"^state farm mutual automo(?:bile)?(?:\b|$)", "State Farm Auto"),
         (r"^state farm insurance(?:\b|$)", "State Farm Insurance"),
         (r"^tmwa(?:\b|$)", "TMWA"),
-        (r"^waste management(?:\b|$)", "Waste Management"),
+        (r"^(?:waste management|wm)(?:\b|$)", "Waste Management"),
         (r"^washoe county treasurer(?:\b|$)", "Washoe County Treasurer"),
         (r"^usps(?:\b|$)", "USPS"),
     ]
@@ -122,6 +221,8 @@ def normalize_street(value):
         "street": "st",
         "avenue": "ave",
         "road": "rd",
+        "way": "way",
+        "wy": "way",
         "lane": "ln",
         "drive": "dr",
         "circle": "cir",
@@ -141,7 +242,7 @@ def property_from_address(address):
         return None
     street = normalize_street(address.get("street") or "")
     # A unit identifies part of this property, not a different destination account.
-    street = re.sub(r" (?:apt|apartment|unit|suite|#) ?[a-z0-9-]+$", "", street)
+    street = re.sub(r" (?:apt|apartment|unit|suite|#) ?(?:\d+ \d+|[a-z0-9-]+)$", "", street)
     city = (address.get("city") or "").strip().casefold()
     state = (address.get("state") or "").strip().casefold()
     if state == "nevada":

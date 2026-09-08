@@ -1,8 +1,8 @@
 # Implementation status
 
 The first implementation covers document ingestion through manual approval and
-permanent archival. Quicken interaction and parcel mapping are deferred at the
-user's request.
+permanent archival. Verified parcel and rental-unit assignments are implemented;
+Quicken interaction remains unfinished.
 
 ## Implemented
 
@@ -21,6 +21,12 @@ user's request.
   including 287 blank-payee entries, with no unreadable dates or amounts.
 - Explicit property directory with aliases, separate unit labels, exact yearly
   destinations, preserved manual routes and audited alias migrations.
+- Eight verified Washoe parcel mappings, explicit rental/whole-property/unresolved
+  selections, separate expense and rental tags, and WM service-customer mappings.
+- Automatic utility document classification, per-location subtotal extraction,
+  separate billing/service customer IDs, invoice context, and exclusion of
+  aggregate totals, components and instructional examples. Payment dates remain
+  separate from invoice dates and service periods.
 - Preferred 2026 categories and recurring business rules with year-specific
   R&K accounts; auto insurance keeps the exact-account exception. Rules preserve
   printed payees, and merchant aliases support matching.
@@ -53,7 +59,7 @@ user's request.
 
 ## Verification
 
-The final local test run passed all 74 tests. The production browser build,
+The September 7 local test run passed all 109 tests. The production browser build,
 Python lint, deployment-script syntax, and diff whitespace checks also passed.
 
 Automated checks include Python/API tests, real Chromium workflow tests at desktop
@@ -62,7 +68,7 @@ protocol adapter contracts, and an offscreen PySide6 window check on Linux.
 Frontend TypeScript compilation and the production build pass. Python lint and
 shell syntax checks are included in the final verification.
 
-Live extraction against the supplied photos and configured local model produced:
+Earlier live extraction against the supplied photos and configured local model produced:
 
 | Sample | Result |
 | --- | --- |
@@ -83,9 +89,19 @@ The live examples are stored under the ignored application data directory, and
 remain unapproved. Test screenshots and generated login credentials are under
 ignored `.local/`; private photos and credentials are not part of source control.
 
+The later WM/sewer batch contains six photos imported as five documents with 18
+review rows. The configured endpoint failed to load the model and returned HTTP
+400, so this batch used audited visual transcription. Its failed model attempts
+are retained. Automated classification tests pass, but live extraction needs to
+be exercised again after the model-loading failure is resolved.
+
 ## Deliberately unfinished or not verified here
 
-- Automatic parcel-to-property mapping. Review supports manual assignment now.
+- Some physical rental-to-Quicken-tag mappings remain unresolved, including the
+  two Bell WM locations. Only supported identities receive automatic unit tags.
+- Re-extraction with reconciliation of existing review rows, or adding a missed
+  row to an existing source document. Retry currently rejects documents that
+  already have proposed transactions.
 - Actual Quicken entry, desktop readiness checks, delivery-run state, and
   reconciliation of uncertain Quicken outcomes. No imported/entered success can
   be reported by the current placeholder.

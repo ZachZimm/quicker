@@ -129,23 +129,53 @@ address alone does not select a rental. The full printed address, including any
 unit suffix, and printed utility account number are retained for review. Customer,
 premises and meter numbers are not substituted for the utility account number.
 
-`VERIFIED_UNIT_MAPPINGS` in `server/quicker/profile.py` is currently empty. The
-available NV Energy bill identifies Bell Street but does not establish its rental
-unit, and the related Quicken history has no unit tags that resolve it. Add a
-mapping only when bills or other records establish the identity. Each mapping is
+`VERIFIED_UNIT_MAPPINGS` in `server/quicker/profile.py` records the WM service
+customer IDs for the Holman and West Sixth rentals. The Bell IDs identify two
+physical locations, `1008 Bell St` and `1008 Bell St #1/2`, but their relationship
+to the Quicken unit tags remains unresolved. The available NV Energy bill also
+does not establish a rental unit. Add a mapping only when bills or other records
+establish the identity. Each mapping is
 a dictionary with `property`, `unit`, `merchant`, a readable `evidence` explanation,
-and `utility_account` and/or `address`. An address has `street`, `city` and `state`.
+and one or more of `utility_account`, `service_customer_id`, or `address`. An address has `street`, `city` and `state`.
 
 The assignment rules require the same merchant and every configured identifier.
 Account matching tolerates spaces and hyphens but preserves leading zeros. Address
 matching requires a service/job address with matching street, unit, city and state;
 a mailing or utility-customer address cannot select a rental. Conflicting verified
-matches leave the unit unresolved. These rules run only when proposals are created.
+matches leave the unit unresolved. An explicit `unresolved` mapping can retain evidence without selecting a unit.
+These rules run only when proposals are created.
 
 The database migration adds explicit unit fields to existing rows, moves recognized
 unit tags into the unit field, and marks verified parcel taxes as whole-property
 expenses. It preserves amounts, accounts, statuses and audit history, and increments
 revisions so an already-open editor cannot overwrite the migrated row.
+
+## Utility statements and service locations
+
+Upload photos without selecting a document type. The vision model identifies
+credit card statements, tax receipts, invoices and utility bills from their
+contents. Separate documents may share an upload batch. The existing grouping
+checkbox is only for ordered pages of the same document.
+
+WM service-detail pages produce one proposed expense per printed service-location
+subtotal, each with its own address and service customer ID. The billing customer
+ID stays separate; it must never be copied to every location as that location's
+ID. The combined statement total, individual subtotal components, previous payment
+lines and instructional sample invoices do not become additional expenses. This
+uses the bill's printed location amounts, without inventing allocations.
+
+Single-location sewer bills use current charges, including sewer, storm and flood
+charges once. A prior payment shown in the account summary is not the payment for
+the current charges. Auto Pay notices do not establish a payment date. Invoice
+dates, invoice numbers and service periods are retained as source context, while
+payment dates remain blank unless established by the document. Missing pages are
+flagged; charges for unseen locations are never inferred from a remaining balance.
+
+The September 2026 source batch is `IMG_3336` through `IMG_3341`. `IMG_3338` and
+`IMG_3339` are consecutive WM detail pages whose six location totals reconcile to
+$572.31. `IMG_3340` and `IMG_3341` are different invoices, each showing only page
+3 of 3; their visible charges do not cover the whole statement. Highlights,
+check marks and adjacent notes do not exclude their printed rows.
 
 ## Bookkeeping defaults
 

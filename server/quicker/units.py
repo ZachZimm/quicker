@@ -57,13 +57,13 @@ def initial_unit_assignment(data):
         and washoe_property_from_parcel(data.get("parcel")) == prop
     ):
         return {**result, "unit": "whole_property", "unit_evidence": "Verified parcel covers the property."}
-    if data.get("document_type") != "invoice":
+    if data.get("document_type") not in {"invoice", "utility"}:
         return result
     matches = []
     for mapping in VERIFIED_UNIT_MAPPINGS:
         if (
             (prop and mapping["property"] != prop)
-            or mapping["unit"] not in property_units(mapping["property"])
+            or mapping["unit"] not in ["unresolved", *property_units(mapping["property"])]
             or not mapping.get("evidence")
             or merchant_identity(mapping["merchant"]) != merchant_identity(data.get("payee"))
         ):
@@ -72,6 +72,11 @@ def initial_unit_assignment(data):
         if mapping.get("utility_account"):
             checks.append(
                 account_identity(data.get("utility_account")) == account_identity(mapping["utility_account"])
+            )
+        if mapping.get("service_customer_id"):
+            checks.append(
+                account_identity(data.get("service_customer_id"))
+                == account_identity(mapping["service_customer_id"])
             )
         if mapping.get("address"):
             checks.append(address_matches(data.get("property_address"), mapping["address"]))

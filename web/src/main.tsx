@@ -1009,6 +1009,33 @@ function Review({
                       Printed utility account: {draft.data.utility_account}
                     </p>
                   )}
+                  {draft.data.service_customer_id && (
+                    <p className="muted small">
+                      Service-location customer ID:{" "}
+                      {draft.data.service_customer_id}
+                    </p>
+                  )}
+                  {draft.data.billing_customer_id && (
+                    <p className="muted small">
+                      Billing customer ID: {draft.data.billing_customer_id}
+                    </p>
+                  )}
+                  {draft.data.invoice_number && (
+                    <p className="muted small">
+                      Invoice: {draft.data.invoice_number}
+                    </p>
+                  )}
+                  {draft.data.invoice_date && (
+                    <p className="muted small">
+                      Invoice date: {draft.data.invoice_date}. This is not the
+                      payment date.
+                    </p>
+                  )}
+                  {draft.data.service_period && (
+                    <p className="muted small">
+                      Service period: {draft.data.service_period}
+                    </p>
+                  )}
                   {(draft.historical_duplicates?.length || 0) > 0 && (
                     <div className="historical-matches">
                       <h4>Matching Quicken transactions</h4>
@@ -1263,6 +1290,11 @@ function UploadDialog({
             </label>
           </>
         )}
+        <p className="muted small">
+          Quicker identifies the document type from the photos automatically.
+          Different kinds of documents can be uploaded together as separate
+          documents.
+        </p>
         <p className="muted small">
           Originals stay in your server archive and sync to Windows when
           connected. Smaller copies are used for reading documents.
