@@ -12,7 +12,7 @@ Quicken interaction remains unfinished.
 - One shared login with hashed passwords, expiring sessions, CSRF checks,
   rate-limited login, and authenticated original/preview access.
 - Configurable model protocol, HTTP/HTTPS transport, host, port, base path, model,
-  optional API key, timeout, image size, and extraction concurrency. Chat
+  optional API key, timeout, image size, output limit, and extraction concurrency. Chat
   completions and Responses adapters have contract tests; the selected local
   model has been exercised through chat completions.
 - Full QIF reference history with dates, signed amounts, blank payees, stable
@@ -30,9 +30,17 @@ Quicken interaction remains unfinished.
 - Preferred 2026 categories and recurring business rules with year-specific
   R&K accounts; auto insurance keeps the exact-account exception. Rules preserve
   printed payees, and merchant aliases support matching.
-- Historical duplicate matches across accounts, visible source details and
-  required acknowledgement. Newly discovered historical matches invalidate
-  affected approvals and stale open edits.
+- Historical duplicate matching uses property/unit scope, exact amounts, nearby
+  dates and printed service periods without inventing payment dates. Explicit
+  existing-transaction links exclude rows from entry. New evidence invalidates
+  approvals; missing linked history returns rows to review.
+- Immutable, downloadable QIF backups with guarded reference activation. Browser,
+  CLI and paired companion uploads share one import path. Partial, stale or
+  malformed-history exports need review before replacing the active reference.
+- Manual missed-row creation and re-extraction comparison on existing documents.
+  Revision checks and retry receipts prevent stale or repeated additions. Current
+  and earlier audited row versions identify already represented source rows,
+  including removed rows. Extraction never replaces reviewed work.
 - Printed service/job and utility-customer addresses can assign a verified
   property, with address evidence shown in review. Mailing addresses, ambiguous
   matches and card statement addresses cannot assign a property. Payment dates
@@ -51,7 +59,8 @@ Quicken interaction remains unfinished.
   again. Failed requests are visible inside open review dialogs.
 - Windows companion UI with pairing, folder ingestion, durable upload receipts,
   checksum-verified local archives, resumable downloads, heartbeat, and tray
-  behavior. Browser uploads also sync to the Windows archive after reconnection.
+  behavior, plus optional QIF file watching and versioned server backup. The
+  companion retains the local QIF file. Browser uploads also sync to the Windows archive after reconnection.
 - Browser and Windows entry buttons visibly disabled. The server entry endpoint
   returns an explicit not-implemented response without mutating transactions.
 - Source installation instructions, Windows packaging script, systemd templates,
@@ -59,7 +68,8 @@ Quicken interaction remains unfinished.
 
 ## Verification
 
-The September 7 local test run passed all 109 tests. The production browser build,
+The September 7 backend completion run passed all 121 tests, including the new
+reference, correction and browser workflows. The production browser build,
 Python lint, deployment-script syntax, and diff whitespace checks also passed.
 
 Automated checks include Python/API tests, real Chromium workflow tests at desktop
@@ -91,17 +101,34 @@ ignored `.local/`; private photos and credentials are not part of source control
 
 The later WM/sewer batch contains six photos imported as five documents with 18
 review rows. The configured endpoint failed to load the model and returned HTTP
-400, so this batch used audited visual transcription. Its failed model attempts
-are retained. Automated classification tests pass, but live extraction needs to
-be exercised again after the model-loading failure is resolved.
+400, so this batch initially used audited visual transcription. The backend
+completion pass rechecked the restored model against these sources. Its matching
+results and failed attempts are retained alongside the original reviewed rows.
+The existing full 1,262-transaction QIF is now also stored as a downloadable,
+active export backup. Holman Way's undated $251.86 sewer bill matches an existing
+February 1, 2026 payment within its printed service period; the match is a review
+suggestion, and no document payment date was filled in.
+
+The completion pass retained nine successful live comparisons, covering all five
+WM/sewer documents, two tax sheets, the earlier utility bill and the card statement.
+All 18 WM/sewer amounts and service-location customer IDs matched the saved rows,
+for $1,620.06. The card comparison again produced 14 eligible purchases totaling
+$4,178.73, excluding the payment and crossed-out $22.06 purchase. Source rows were
+checked before and after storing comparisons and remained unchanged.
+
+Four earlier truncated validation attempts are also retained. Increasing the
+response limit alone did not fix the model's intermittent truncation. Inspection
+found an 8,192-token loaded context with substantial reasoning-token use. The LM
+Studio native adapter supports request-level reasoning control, verified against
+the installed server. Reasoning off completed the remaining utility and card
+samples; the saved workspace now uses that protocol and setting. This does not
+change the model server's global settings. The protocol remains selectable, and
+other models can keep their default reasoning mode.
 
 ## Deliberately unfinished or not verified here
 
 - Some physical rental-to-Quicken-tag mappings remain unresolved, including the
   two Bell WM locations. Only supported identities receive automatic unit tags.
-- Re-extraction with reconciliation of existing review rows, or adding a missed
-  row to an existing source document. Retry currently rejects documents that
-  already have proposed transactions.
 - Actual Quicken entry, desktop readiness checks, delivery-run state, and
   reconciliation of uncertain Quicken outcomes. No imported/entered success can
   be reported by the current placeholder.

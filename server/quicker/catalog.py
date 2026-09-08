@@ -78,6 +78,7 @@ def coverage(ref):
 def parse_qif(content: str):
     result = {"accounts": {}, "categories": {}, "tags": {}, "payees": [], "history": []}
     section, account, record = "", "", []
+    occurrences = Counter()
     for line in content.lstrip("\ufeff").splitlines():
         if line.startswith("!"):
             if record:
@@ -112,7 +113,12 @@ def parse_qif(content: str):
                 if not account:
                     raise ValueError("Transactions have no account header; export with Account List included")
                 raw_date, raw_amount = field(record, "D"), field(record, "T") or field(record, "U")
-                identity = f"{account}\n{len(result['history'])}\n" + "\n".join(record)
+                # Stable when other transactions/accounts are inserted or reordered.
+                identity = (
+                    account + "\n" + "\n".join(sorted(line for line in record if not line.startswith("C")))
+                )
+                occurrences[identity] += 1
+                identity += f"\noccurrence:{occurrences[identity]}"
                 entry.update(
                     id=hashlib.sha256(identity.encode()).hexdigest(),
                     account=account,

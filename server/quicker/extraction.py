@@ -101,10 +101,24 @@ class VisionAdapter:
                     },
                 ],
                 "temperature": 0,
-                "max_tokens": 6000,
+                "max_tokens": cfg.output_limit,
                 "stream": False,
             }
             path = "/chat/completions"
+        elif cfg.protocol == "lm-studio":
+            body = {
+                "model": cfg.model,
+                "system_prompt": system,
+                "input": [{"type": "text", "content": prompt}]
+                + [{"type": "image", "data_url": url} for url in urls],
+                "temperature": 0,
+                "max_output_tokens": cfg.output_limit,
+                "stream": False,
+                "store": False,
+            }
+            if cfg.reasoning != "default":
+                body["reasoning"] = cfg.reasoning
+            path = "/chat"
         else:
             body = {
                 "model": cfg.model,
@@ -116,7 +130,7 @@ class VisionAdapter:
                         + [{"type": "input_image", "image_url": url} for url in urls],
                     }
                 ],
-                "max_output_tokens": 6000,
+                "max_output_tokens": cfg.output_limit,
                 "stream": False,
             }
             path = "/responses"
@@ -134,11 +148,19 @@ class VisionAdapter:
                 choice = data["choices"][0]
                 if choice.get("finish_reason") == "length":
                     raise ModelError(
-                        "Model response was truncated. Use fewer pages per document or a larger model context."
+                        "Model response was truncated. Increase the output limit and model context, or use fewer pages per document."
                     )
                 return choice["message"]["content"]
+            if cfg.protocol == "lm-studio":
+                if data.get("stats", {}).get("total_output_tokens", 0) >= cfg.output_limit:
+                    raise ModelError(
+                        "Model response reached the output limit. Increase it or use fewer pages."
+                    )
+                return "\n".join(item["content"] for item in data["output"] if item.get("type") == "message")
             if data.get("status") == "incomplete":
-                raise ModelError("Model response was incomplete. Use fewer pages or a larger model context.")
+                raise ModelError(
+                    "Model response was incomplete. Increase the output limit and model context, or use fewer pages."
+                )
             return "\n".join(
                 part.get("text", "")
                 for item in data.get("output", [])

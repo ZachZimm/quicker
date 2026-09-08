@@ -7,8 +7,9 @@ from pathlib import Path
 
 from sqlalchemy import delete
 
-from .catalog import import_catalog
+from .catalog import catalog
 from .db import BrowserSession, Database, User
+from .reference_exports import store_export
 from .security import password_hash
 
 
@@ -44,17 +45,17 @@ def main():
 
         uvicorn.run(create_app(db), host=args.host, port=args.port)
     elif args.command == "import-qif":
-        with db.write() as session:
-            result = import_catalog(
-                session, Path(args.path).read_text(encoding="utf-8-sig", errors="replace")
-            )
+        path = Path(args.path)
+        result = store_export(db, path.read_bytes(), path.name, source="cli")
+        with db.session() as session:
+            ref = catalog(session)
         print(
             json.dumps(
                 {
+                    **result,
                     "counts": {
-                        k: len(result[k]) for k in ("accounts", "categories", "tags", "payees", "history")
+                        k: len(ref[k]) for k in ("accounts", "categories", "tags", "payees", "history")
                     },
-                    "coverage": result["coverage"],
                 }
             )
         )

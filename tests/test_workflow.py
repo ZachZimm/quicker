@@ -153,7 +153,9 @@ def test_remove_restore_and_no_reprocessing_over_edits(auth, db, photo):
     removed = action(auth, row, "remove").json()[0]
     assert removed["status"] == "removed"
     assert action(auth, removed, "approve").status_code == 422
-    assert auth.post("/api/documents/" + row["document_id"] + "/retry").status_code == 409
+    assert auth.post("/api/documents/" + row["document_id"] + "/retry").status_code == 200
+    process_one(db, InvoiceAdapter)
+    assert auth.get("/api/transactions").json()[0]["status"] == "removed"
     restored = action(auth, removed, "restore").json()[0]
     assert restored["status"] == "review"
     assert restored["data"] == removed["data"]

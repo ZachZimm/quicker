@@ -12,8 +12,9 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 
-from .catalog import catalog, coverage, import_catalog, route_list
+from .catalog import catalog, coverage, route_list
 from .contracts import ModelConfig, ReviewAction
+from .corrections import AcceptProposals, ManualRow, accept_proposals, add_manual, comparison
 from .db import (
     ArchiveReceipt,
     Audit,
@@ -27,6 +28,7 @@ from .db import (
     LoginAttempt,
     Page,
     PairCode,
+    ReferenceExport,
     Route,
     Setting,
     User,
@@ -34,6 +36,7 @@ from .db import (
 from .documents import MAX_FILE_BYTES, ingest, model_settings, pages_for, prepare_image, serialize_page
 from .extraction import ModelError, VisionAdapter
 from .profile import PREFERRED_CATEGORIES, canonical_property, property_directory
+from .reference_exports import MAX_EXPORT_BYTES, activate, reference_status, store_export
 from .review import ReviewError, apply_action, serialize
 from .security import digest, password_hash, password_matches
 
@@ -51,6 +54,10 @@ class Pairing(BaseModel):
 class ArchiveAck(BaseModel):
     page_id: str
     sha256: str
+
+
+class ActivateReference(BaseModel):
+    expected_digest: str
 
 
 class RouteInput(BaseModel):
@@ -228,21 +235,68 @@ def create_app(database=None):
             }
 
     @app.post("/api/catalog")
-    async def upload_catalog(auth: Auth, file: Annotated[UploadFile, File()]):
-        content = await file.read(10 * 1024 * 1024 + 1)
-        if len(content) > 10 * 1024 * 1024:
+    @app.post("/api/device/reference")
+    async def upload_catalog(
+        auth: Auth,
+        file: Annotated[UploadFile, File()],
+        expected_digest: str | None = Form(None),
+        source_modified: str | None = Form(None),
+    ):
+        content = await file.read(MAX_EXPORT_BYTES + 1)
+        if len(content) > MAX_EXPORT_BYTES:
             raise HTTPException(413, "QIF export exceeds 10 MB")
         try:
-            with db.write() as session:
-                ref = import_catalog(session, content.decode("utf-8-sig", errors="replace"))
+            if auth.get("device_id") and expected_digest is None:
+                raise HTTPException(422, "Sync must include the observed reference digest")
+            result = store_export(
+                db,
+                content,
+                file.filename or "reference.QIF",
+                source=f"device:{auth['device_id']}" if auth.get("device_id") else "browser",
+                expected_digest=expected_digest,
+                source_modified=source_modified,
+            )
+            with db.session() as session:
+                ref = catalog(session)
                 return {
+                    **result,
                     "counts": {
                         key: len(ref[key]) for key in ("accounts", "categories", "tags", "payees", "history")
                     },
-                    "coverage": ref["coverage"],
+                    "active_coverage": ref["coverage"],
                 }
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from exc
+
+    @app.get("/api/reference-exports")
+    @app.get("/api/device/reference")
+    def reference_versions(auth: Auth):
+        with db.session() as session:
+            return reference_status(session)
+
+    @app.get("/api/reference-exports/{sha}/original")
+    def reference_original(sha: str, auth: Auth):
+        with db.session() as session:
+            export = session.get(ReferenceExport, sha)
+            if not export:
+                raise HTTPException(404, "Export not found")
+            return FileResponse(
+                db.blobs / export.sha256, filename=export.name, media_type="application/octet-stream"
+            )
+
+    @app.post("/api/reference-exports/{sha}/activate")
+    def activate_reference(sha: str, body: ActivateReference, auth: Auth):
+        with db.write() as session:
+            if body.expected_digest != (catalog(session).get("digest") or "empty"):
+                raise HTTPException(409, "The reference changed. Reload before activating this backup.")
+            export = session.get(ReferenceExport, sha)
+            if not export:
+                raise HTTPException(404, "Export not found")
+            try:
+                activate(session, db, export)
+            except ValueError as exc:
+                raise HTTPException(422, str(exc)) from exc
+        return {"ok": True}
 
     @app.put("/api/routes")
     def save_routes(body: list[RouteInput], auth: Auth):
@@ -321,6 +375,21 @@ def create_app(database=None):
                 )
             ]
 
+    @app.post("/api/documents/{document_id}/transactions")
+    def manual_transaction(document_id: str, body: ManualRow, auth: Auth):
+        with db.write() as session:
+            return add_manual(session, document_id, body)
+
+    @app.get("/api/documents/{document_id}/attempts/{attempt_id}/comparison")
+    def compare_extraction(document_id: str, attempt_id: str, auth: Auth):
+        with db.session() as session:
+            return comparison(session, document_id, attempt_id)
+
+    @app.post("/api/documents/{document_id}/attempts/{attempt_id}/comparison")
+    def accept_extraction(document_id: str, attempt_id: str, body: AcceptProposals, auth: Auth):
+        with db.write() as session:
+            return accept_proposals(session, document_id, attempt_id, body)
+
     @app.post("/api/documents/{document_id}/retry")
     def retry(document_id: str, auth: Auth):
         with db.write() as session:
@@ -329,11 +398,6 @@ def create_app(database=None):
                 raise HTTPException(404, "Document not found")
             if doc.status not in ("failed", "ready"):
                 raise HTTPException(409, "Document is already queued or processing")
-            if session.scalar(select(Candidate.id).where(Candidate.document_id == document_id).limit(1)):
-                raise HTTPException(
-                    409,
-                    "This document has proposed transactions. Edit them in review; extraction cannot overwrite your work.",
-                )
             doc.status, doc.error = "queued", None
             session.add(
                 Job(

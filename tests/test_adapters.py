@@ -129,3 +129,32 @@ def test_invalid_visual_exclusion_fails_extraction(monkeypatch, bad_check):
     monkeypatch.setattr(VisionAdapter, "complete", lambda *args: next(replies))
     with pytest.raises(ModelError, match="crossed-out item check"):
         VisionAdapter(ModelConfig()).extract([b"first", b"second"], {"categories": [], "tags": []})
+
+
+def test_native_adapter_uses_explicit_reasoning_and_rejects_output_limit(monkeypatch):
+    limited = False
+
+    def handler(request):
+        body = json.loads(request.content)
+        assert request.url.path == "/api/v1/chat"
+        assert body["reasoning"] == "off" and body["store"] is False
+        assert body["input"][0]["type"] == "text"
+        assert body["input"][1]["type"] == "image"
+        assert body["max_output_tokens"] == 4000
+        return httpx.Response(
+            200,
+            json={
+                "output": [{"type": "message", "content": "QUICKER 284"}],
+                "stats": {"total_output_tokens": 4000 if limited else 8},
+            },
+        )
+
+    real_client = httpx.Client
+    monkeypatch.setattr(
+        httpx, "Client", lambda **kwargs: real_client(transport=httpx.MockTransport(handler), **kwargs)
+    )
+    config = ModelConfig(protocol="lm-studio", base_path="/api/v1", reasoning="off", output_limit=4000)
+    assert VisionAdapter(config).check()["vision"]
+    limited = True
+    with pytest.raises(ModelError, match="output limit"):
+        VisionAdapter(config).check()

@@ -37,7 +37,7 @@ HTTPS deployment, use the reverse-proxy configuration below.
 
 Settings default to `http://localhost:1234/v1`, protocol `chat-completions`, and
 model `qwen3.8-27b@q4_k_m`, with no API key. Protocol, transport, host, port, base
-path, model, optional key, timeout, concurrency, and image size are editable in
+path, model, optional key, timeout, concurrency, output limit, and image size are editable in
 Settings. A blank key on a new connection sends no Authorization header; the
 explicit Remove key checkbox clears an existing key. The vision check uses a
 small synthetic image. Save settings before testing them.
@@ -79,18 +79,57 @@ password and invalidates browser sessions. It does not delete documents.
    confirmations and dates. Underlines, check marks, and adjacent notes alone do
    not exclude a transaction.
 6. Select rows for bulk property, account, category, or date assignment and batch
-   approval. Possible duplicates within Quicker or in imported Quicken history
-   require explicit acknowledgement. Historical matches show account, date,
-   signed amount, payee and category. A new historical match on a later import
-   returns affected approvals to review. Removing a row
-   retains its edits and original document. Restoring returns it to review.
-   Editing an approved transaction requires approval again.
-7. Pair the Windows companion to populate its archive, including phone uploads.
+   approval. Matching Quicken history shows the account, date, amount, payee,
+   category and reason for the suggestion. Use **Already in Quicken** to link the
+   document row and exclude it from entry, or acknowledge that it is a separate
+   transaction before approval. A link does not invent missing document fields.
+   Matches use property and unit evidence, allow nearby payment dates, and can
+   flag a payment within a printed service period when the bill has no date.
+   New duplicate evidence invalidates affected approvals and open edits. Removing
+   a row preserves it; restoring returns it to review. Editing an approved row
+   requires approval again.
+7. Open a source document to add a missed transaction or retry extraction. A new
+   extraction produces a comparison when rows already exist. Select missing rows
+   to add; saved edits, approvals, existing-transaction links and removed rows
+   remain intact. New rows require review. Repeat requests cannot add them twice.
+8. Pair the Windows companion to populate its archive, including phone uploads.
+   Optionally select the all-accounts QIF export file to sync it automatically
+   whenever Quicken writes a changed export.
 
 Catalog assignments from extraction are suggestions. Required dates, valid
 catalog names, exact amounts, and duplicate acknowledgement are enforced by the
 server at approval time. The model can still make reading mistakes; review the
 source before approval. No model output can initiate Quicken entry.
+
+## Quicken export synchronization
+
+The companion watches the selected QIF file for stable changes, uploads exact
+bytes, verifies the server receipt and retains the local export. It does not
+create exports inside Quicken. Export all accounts and all dates to that file
+regularly, especially before preparing another batch for entry.
+
+Settings lists each distinct received version, its transaction coverage and a
+backup download. The CLI `import-qif` command uses the same versioned storage.
+Exports with reduced history, unreadable amounts/dates, an older source timestamp
+or a conflicting reference update are backed up but held for review. Only activate
+such a version after checking its coverage. Retrying an upload never reactivates
+an archived version. Original export bytes are included in `quicker backup`.
+A QIF backup does not replace a full Quicken data-file backup.
+
+Rows linked as **Already in Quicken** cannot be approved for entry. If their match
+vanishes from a later active export, they return to review. Separate-transaction
+acknowledgements are bound to the duplicate evidence; new matches require review
+again. Future delivery code must use the server's `entry_eligible` result and
+recheck it when claiming work. Actual Quicken entry is still unimplemented.
+
+## LM Studio extraction
+
+The LM Studio native protocol uses base path `/api/v1` and offers a request-level
+reasoning control. The supplied local model was also tested with reasoning off
+because reasoning could exhaust its loaded 8,192-token context. Chat completions
+and Responses remain available for other compatible endpoints. The output limit
+bounds generation but does not enlarge the model's loaded context. Truncated or
+invalid results never create partial rows.
 
 ## Address-based property assignment
 

@@ -141,3 +141,56 @@ def test_browser_rental_selection_preserves_expense_tag(browser_url, auth, db, p
         assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
         page.screenshot(path='.local/unit-review-phone.png', full_page=True, animations='disabled')
         browser.close()
+
+
+def test_browser_corrections_and_existing_link(browser_url, auth, db, photo):
+    from quicker.reference_exports import store_export
+    from test_completion import ExtraRowAdapter, export
+    from test_workflow import ready
+
+    ready(auth, db, photo)
+    store_export(db, export(account="2026 Bell St.", amount="214.55", day="7/19'26", payee="Example Energy").encode(), "test.QIF")
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 1440, "height": 1000})
+        errors = []
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.goto(browser_url)
+        page.get_by_label("Username", exact=True).fill("admin")
+        page.get_by_label("Password", exact=True).fill("test-password-12345")
+        page.get_by_role("button", name="Sign in", exact=True).click()
+        page.get_by_role("button", name="Example Energy", exact=True).click()
+        page.get_by_label("Payment / transaction date", exact=True).fill("2026-07-19")
+        page.get_by_role("button", name="Save for review", exact=True).click()
+        page.get_by_role("button", name="Example Energy", exact=True).click()
+        page.get_by_role("button", name="Already in Quicken", exact=True).click()
+        page.get_by_role("tab", name="Already in Quicken").click()
+        expect(page.get_by_role("button", name="Example Energy", exact=True)).to_be_visible()
+        page.get_by_role("button", name="Example Energy", exact=True).click()
+        expect(page.get_by_role("button", name="Restore to review")).to_be_visible()
+        page.keyboard.press("Escape")
+        page.get_by_role("button", name="Documents", exact=False).first.click()
+        page.get_by_role("button", name="Open document", exact=False).first.click()
+        page.get_by_label("Source description", exact=True).fill("Missed paper receipt")
+        page.get_by_role("button", name="Add missed transaction", exact=True).click()
+        expect(page.get_by_label("Source description", exact=True)).to_have_value("")
+        page.get_by_role("button", name="Retry extraction", exact=True).click()
+        expect(page.get_by_role("dialog")).to_have_count(0)
+        assert process_one(db, ExtraRowAdapter)
+        page.reload()
+        page.get_by_role("button", name="Documents", exact=False).first.click()
+        page.get_by_role("button", name="Open document", exact=False).first.click()
+        page.get_by_role("button", name="Compare extraction", exact=True).click()
+        expect(page.get_by_role("heading", name="Extraction comparison")).to_be_visible()
+        page.get_by_label("Page 1: Missed Merchant", exact=False).check()
+        page.get_by_role("button", name="Add selected missing rows").click()
+        expect(page.get_by_role("button", name="Add selected missing rows")).to_be_disabled()
+        expect(page.get_by_text("Saved: Missed Merchant", exact=False)).to_be_visible()
+        assert len(auth.get("/api/transactions").json()) == 3
+        page.get_by_role("button", name="Close document", exact=True).click()
+        page.get_by_role("button", name="Settings", exact=True).click()
+        expect(page.get_by_role("link", name="Download backup", exact=True)).to_be_visible()
+        page.set_viewport_size({"width": 390, "height": 844})
+        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+        assert not errors
+        browser.close()

@@ -55,7 +55,7 @@ export function useReviewTools(
           properties: {
             status: {
               type: "string",
-              enum: ["review", "approved", "removed", "all"],
+              enum: ["review", "approved", "existing", "removed", "all"],
             },
           },
           required: ["status"],
@@ -66,7 +66,9 @@ export function useReviewTools(
           const status = (input as { status?: unknown })?.status;
           if (
             typeof status !== "string" ||
-            !["review", "approved", "removed", "all"].includes(status)
+            !["review", "approved", "existing", "removed", "all"].includes(
+              status,
+            )
           )
             throw new Error("Choose a valid transaction status");
           setFilter(status);

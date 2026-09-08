@@ -237,6 +237,7 @@ def test_legacy_units_and_tax_scope_migrate_with_audit(db, photo):
                 ),
             ]
         )
+        session.execute(text("DROP TABLE reference_exports"))
         session.execute(text("UPDATE alembic_version SET version_num='9b9eb6571ac7'"))
     db.migrate()
     with db.session() as session:

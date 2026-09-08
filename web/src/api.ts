@@ -129,6 +129,12 @@ export type Transaction = {
   revision: number;
   status: string;
   data: Fields & {
+    existing_match?: {
+      account: string;
+      date: string;
+      payee: string;
+      amount_minor: number;
+    } | null;
     source: string;
     page: number;
     parcel: string | null;
@@ -163,6 +169,7 @@ export type Transaction = {
     category: string;
     tag: string;
     memo: string;
+    match_reason: string;
   }[];
 };
 export function fieldsOnly(data: Transaction["data"]): Fields {

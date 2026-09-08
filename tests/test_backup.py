@@ -9,6 +9,9 @@ from test_workflow import upload
 
 
 def test_backup_restores_database_and_originals(auth, db, photo, tmp_path, monkeypatch):
+    from conftest import QIF
+    from quicker.reference_exports import store_export
+    backup_export = store_export(db, QIF.encode(), "backup.QIF")
     original = upload(auth, photo)
     target = tmp_path / "backup"
     monkeypatch.setenv("QUICKER_DATA_DIR", str(db.directory))
@@ -21,5 +24,6 @@ def test_backup_restores_database_and_originals(auth, db, photo, tmp_path, monke
     with TestClient(create_app(restored)) as browser:
         session = browser.post("/api/login", json={"username": "admin", "password": "test-password-12345"})
         assert session.status_code == 200
+        assert browser.get(f"/api/reference-exports/{backup_export['sha256']}/original").content == QIF.encode()
         assert browser.get("/api/pages/" + original["pages"][0]["id"] + "/original").content == photo
     restored.engine.dispose()

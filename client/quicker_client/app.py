@@ -74,7 +74,19 @@ def main():
                 button.clicked.connect(lambda _, field=field: self.browse(field))
                 row.addWidget(button)
                 form.addRow(label, row)
+            self.qif = QLineEdit(self.config.get("qif_path", ""))
+            qif_row = QHBoxLayout()
+            qif_row.addWidget(self.qif)
+            qif_browse = QPushButton("Browse…")
+            qif_browse.clicked.connect(self.browse_qif)
+            qif_row.addWidget(qif_browse)
+            form.addRow("Quicken QIF export", qif_row)
             layout.addLayout(form)
+            layout.addWidget(
+                QLabel(
+                    "Optional: export all Quicken accounts and dates to this file. Changes sync automatically."
+                )
+            )
             buttons = QHBoxLayout()
             self.pair_button = QPushButton("Pair using code")
             self.pair_button.clicked.connect(self.pair)
@@ -115,6 +127,13 @@ def main():
             if selected:
                 field.setText(selected)
 
+        def browse_qif(self):
+            selected, _ = QFileDialog.getOpenFileName(
+                self, "Choose Quicken export", self.qif.text(), "Quicken export (*.qif *.QIF)"
+            )
+            if selected:
+                self.qif.setText(selected)
+
         def log_message(self, message):
             # Plain text prevents filenames or server messages from becoming rich text.
             self.log.append(message.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
@@ -124,6 +143,7 @@ def main():
                 server=self.server.text().strip().rstrip("/"),
                 input=self.input.text(),
                 archive=self.archive.text(),
+                qif_path=self.qif.text().strip(),
             )
             temp = self.config_path.with_suffix(".tmp")
             temp.write_text(json.dumps(self.config, indent=2))
@@ -181,6 +201,7 @@ def main():
                     self.config["archive"],
                     self.state_dir,
                     self.events.message.emit,
+                    qif_path=self.config.get("qif_path"),
                 )
                 self.thread = threading.Thread(target=self.engine.run, daemon=True)
                 self.thread.start()

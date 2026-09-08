@@ -28,7 +28,15 @@ def archive_path(directory, page):
 
 class Companion:
     def __init__(
-        self, server, token, input_dir, archive_dir, state_dir, report=lambda message: None, transport=None
+        self,
+        server,
+        token,
+        input_dir,
+        archive_dir,
+        state_dir,
+        report=lambda message: None,
+        transport=None,
+        qif_path=None,
     ):
         self.input_dir, self.archive_dir = Path(input_dir).resolve(), Path(archive_dir).resolve()
         if (
@@ -44,6 +52,12 @@ class Companion:
         with sqlite3.connect(self.journal_path) as journal:
             journal.execute(
                 "CREATE TABLE IF NOT EXISTS uploads (source TEXT, sha TEXT, request_id TEXT, receipt TEXT, PRIMARY KEY(source,sha))"
+            )
+        self.qif_path = Path(qif_path).resolve() if qif_path else None
+        self.server_scope = hashlib.sha256((server.rstrip("/") + token).encode()).hexdigest()
+        with sqlite3.connect(self.journal_path) as journal:
+            journal.execute(
+                "CREATE TABLE IF NOT EXISTS exports (scope TEXT, sha TEXT, receipt TEXT, PRIMARY KEY(scope,sha))"
             )
         self.http = httpx.Client(
             base_url=server.rstrip("/"),
@@ -153,7 +167,58 @@ class Companion:
         self.request("POST", "/api/device/archive", json={"page_id": page["id"], "sha256": page["sha256"]})
         self.report(f"Downloaded {page['name']} to the archive")
 
+    def sync_export(self):
+        source = self.qif_path
+        if not source:
+            return
+        if source.suffix.lower() != ".qif":
+            raise ValueError("Choose a Quicken QIF export file")
+        before = source.stat()
+        stamp = (before.st_size, before.st_mtime_ns)
+        previous = self.stable.get(str(source))
+        self.stable[str(source)] = stamp
+        if previous != stamp:
+            return  # Require an unchanged file across two polling cycles.
+        if not 0 < before.st_size <= 10 * 1024 * 1024:
+            raise ValueError("QIF export must be between 1 byte and 10 MB")
+        content = source.read_bytes()
+        after = source.stat()
+        if stamp != (after.st_size, after.st_mtime_ns):
+            return
+        sha = hashlib.sha256(content).hexdigest()
+        with sqlite3.connect(self.journal_path) as journal:
+            if journal.execute(
+                "SELECT 1 FROM exports WHERE scope=? AND sha=?", (self.server_scope, sha)
+            ).fetchone():
+                return
+        current = self.request("GET", "/api/device/reference")
+        result = self.request(
+            "POST",
+            "/api/device/reference",
+            data={"expected_digest": current.get("digest") or "empty", "source_modified": str(before.st_mtime_ns)},
+            files={"file": (source.name, content, "application/octet-stream")},
+        )
+        if result.get("sha256") != sha or result.get("status") not in ("active", "archived", "needs_review"):
+            raise RuntimeError("Server did not confirm this exact QIF backup")
+        with sqlite3.connect(self.journal_path) as journal:
+            journal.execute(
+                "INSERT OR REPLACE INTO exports VALUES (?,?,?)", (self.server_scope, sha, json.dumps(result))
+            )
+        self.report(
+            f"QIF backed up: {source.name}. "
+            + (
+                "Review it in browser settings before use."
+                if result["status"] == "needs_review"
+                else "Reference synchronized."
+            )
+        )
+
     def cycle(self):
+        try:
+            self.sync_export()
+        except (OSError, RuntimeError, ValueError, sqlite3.Error, httpx.HTTPError):
+            self.report("QIF sync failed. Check the export file and connection; the next cycle will retry.")
+
         for source in sorted(self.input_dir.iterdir()):
             if self.stop.is_set():
                 return

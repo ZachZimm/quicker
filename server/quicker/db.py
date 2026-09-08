@@ -136,6 +136,18 @@ class Route(Base):
     account: Mapped[str] = mapped_column(String)
 
 
+class ReferenceExport(Base):
+    __tablename__ = "reference_exports"
+    sha256: Mapped[str] = mapped_column(String, primary_key=True)
+    name: Mapped[str] = mapped_column(String)
+    created: Mapped[int] = mapped_column(Integer)
+    source: Mapped[str] = mapped_column(String)
+    source_modified: Mapped[str | None] = mapped_column(String, nullable=True)
+    status: Mapped[str] = mapped_column(String)
+    note: Mapped[str] = mapped_column(Text, default="")
+    coverage: Mapped[dict] = mapped_column(JSON)
+
+
 class Database:
     def __init__(self, directory: str | Path | None = None):
         self.directory = Path(directory or os.environ.get("QUICKER_DATA_DIR", "data")).resolve()

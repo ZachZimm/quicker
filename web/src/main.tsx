@@ -466,7 +466,16 @@ function Review({
         data.unit_evidence = null;
       }
       if (key === "unit") data.unit_evidence = "Assigned during review.";
-      if (["payee", "date", "amount_minor"].includes(key))
+      if (
+        [
+          "payee",
+          "date",
+          "amount_minor",
+          "property",
+          "unit",
+          "account",
+        ].includes(key)
+      )
         data.duplicate_acknowledged = false;
       if ((key === "property" || key === "date") && !data.account_override)
         data.account =
@@ -490,6 +499,7 @@ function Review({
           {[
             ["review", "Needs review"],
             ["approved", "Approved"],
+            ["existing", "Already in Quicken"],
             ["removed", "Removed"],
             ["all", "All"],
           ].map(([id, label]) => (
@@ -521,7 +531,7 @@ function Review({
       {chosen.length > 0 && (
         <div className="bulk-bar">
           <strong>{chosen.length} selected</strong>
-          {filter !== "removed" && (
+          {!["removed", "existing"].includes(filter) && (
             <>
               <select
                 aria-label="Bulk property"
@@ -595,14 +605,18 @@ function Review({
           )}
           <button
             disabled={busy}
-            onClick={() => act(filter === "removed" ? "restore" : "remove")}
+            onClick={() =>
+              act(
+                ["removed", "existing"].includes(filter) ? "restore" : "remove",
+              )
+            }
           >
-            {filter === "removed" ? (
+            {["removed", "existing"].includes(filter) ? (
               <RotateCcw size={16} />
             ) : (
               <Trash2 size={16} />
             )}{" "}
-            {filter === "removed" ? "Restore" : "Remove"}
+            {["removed", "existing"].includes(filter) ? "Restore" : "Remove"}
           </button>
         </div>
       )}
@@ -658,7 +672,15 @@ function Review({
                   </td>
                   <td>
                     {r.data.date || (
-                      <span className="missing">Date required</span>
+                      <span
+                        className={
+                          r.status === "existing" ? "muted" : "missing"
+                        }
+                      >
+                        {r.status === "existing"
+                          ? "Not printed"
+                          : "Date required"}
+                      </span>
                     )}
                   </td>
                   <td>
@@ -697,12 +719,15 @@ function Review({
                         ? r.issues.length
                           ? `${r.issues.length} to resolve`
                           : "Ready to approve"
-                        : r.status}
+                        : r.status === "existing"
+                          ? "Already in Quicken"
+                          : r.status}
                     </span>
-                    {(r.duplicates.length > 0 ||
-                      (r.historical_duplicates?.length || 0) > 0) && (
-                      <small className="missing">Possible duplicate</small>
-                    )}
+                    {r.status !== "existing" &&
+                      (r.duplicates.length > 0 ||
+                        (r.historical_duplicates?.length || 0) > 0) && (
+                        <small className="missing">Possible duplicate</small>
+                      )}
                   </td>
                   <td>
                     <button
@@ -800,7 +825,18 @@ function Review({
                     ))}
                   </details>
                 )}
-                <fieldset disabled={draft.status === "removed" || busy}>
+                {draft.status === "existing" && draft.data.existing_match && (
+                  <p className="alert">
+                    Already recorded in {draft.data.existing_match.account} on{" "}
+                    {draft.data.existing_match.date}. This source is linked and
+                    will not be entered again.
+                  </p>
+                )}
+                <fieldset
+                  disabled={
+                    ["removed", "existing"].includes(draft.status) || busy
+                  }
+                >
                   <label>
                     Payee
                     <input
@@ -1055,6 +1091,41 @@ function Review({
                             {match.tag ? ` / ${match.tag}` : ""}
                           </span>
                           {match.memo && <span>{match.memo}</span>}
+                          <span>{match.match_reason}</span>
+                          <button
+                            type="button"
+                            disabled={
+                              busy ||
+                              JSON.stringify(fieldsOnly(draft.data)) !==
+                                JSON.stringify(
+                                  fieldsOnly(current?.data || draft.data),
+                                )
+                            }
+                            title="Save edits to refresh matches before linking"
+                            onClick={async () => {
+                              if (
+                                await run(
+                                  () =>
+                                    post("/review", {
+                                      action: "existing",
+                                      rows: [
+                                        {
+                                          id: draft.id,
+                                          revision: draft.revision,
+                                          existing_id: match.id,
+                                        },
+                                      ],
+                                    }),
+                                  "Linked to the existing Quicken transaction. It will not be entered again.",
+                                )
+                              ) {
+                                setDraft(null);
+                                setActive(null);
+                              }
+                            }}
+                          >
+                            Already in Quicken
+                          </button>
                         </div>
                       ))}
                     </div>
@@ -1104,7 +1175,7 @@ function Review({
               </div>
             </div>
             <footer className="drawer-footer">
-              {draft.status === "removed" ? (
+              {["removed", "existing"].includes(draft.status) ? (
                 <button onClick={() => act("restore", [draft])}>
                   <RotateCcw size={16} /> Restore to review
                 </button>
@@ -1429,6 +1500,7 @@ function Documents({
               </div>
             )}
             <SourceViewer doc={active} />
+            <DocumentCorrections key={active.id} doc={active} run={run} />
             {active.ignored.length > 0 && (
               <>
                 <h3>Ignored items</h3>
@@ -1451,23 +1523,22 @@ function Documents({
               >
                 Extraction history
               </button>
-              {!rows.some((r) => r.document_id === active.id) &&
-                ["failed", "ready"].includes(active.status) && (
-                  <button
-                    onClick={async () => {
-                      if (
-                        await run(
-                          () => post(`/documents/${active.id}/retry`),
-                          "Document queued with current model settings.",
-                        )
+              {["failed", "ready"].includes(active.status) && (
+                <button
+                  onClick={async () => {
+                    if (
+                      await run(
+                        () => post(`/documents/${active.id}/retry`),
+                        "Document queued with current model settings.",
                       )
-                        setActive(null);
-                    }}
-                  >
-                    <RefreshCw size={16} />
-                    Retry extraction
-                  </button>
-                )}
+                    )
+                      setActive(null);
+                  }}
+                >
+                  <RefreshCw size={16} />
+                  Retry extraction
+                </button>
+              )}
             </div>
             {attempts && (
               <div className="history">
@@ -1485,6 +1556,231 @@ function Documents({
           </section>
         </div>
       )}
+    </>
+  );
+}
+
+function DocumentCorrections({ doc, run }: { doc: DocumentRecord; run: Run }) {
+  const [page, setPage] = useState(1);
+  const [source, setSource] = useState("");
+  const [requestId, setRequestId] = useState(() => crypto.randomUUID());
+  const [comparison, setComparison] = useState<any>(null);
+  const [selected, setSelected] = useState<number[]>([]);
+  const [working, setWorking] = useState(false);
+  return (
+    <section className="panel">
+      <h3>Correct this document</h3>
+      <p>
+        Missing a transaction? Add its source description, then fill in its
+        fields in Needs review.
+      </p>
+      <label>
+        Source page
+        <select
+          aria-label="Source page"
+          value={page}
+          onChange={(e) => setPage(Number(e.target.value))}
+        >
+          {doc.pages.map((p, i) => (
+            <option key={p.id} value={i + 1}>
+              {i + 1}: {p.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Source description
+        <input
+          aria-label="Source description"
+          value={source}
+          onChange={(e) => setSource(e.target.value)}
+          placeholder="Payee or text identifying the missed row"
+        />
+      </label>
+      <button
+        disabled={working || !source.trim()}
+        onClick={async () => {
+          setWorking(true);
+          if (
+            await run(
+              () =>
+                post(`/documents/${doc.id}/transactions`, {
+                  request_id: requestId,
+                  page,
+                  source,
+                }),
+              "Transaction added to Needs review.",
+            )
+          ) {
+            setSource("");
+            setRequestId(crypto.randomUUID());
+            setComparison(null);
+          }
+          setWorking(false);
+        }}
+      >
+        Add missed transaction
+      </button>
+      <p>
+        Run extraction again to compare new results with saved rows. Saved edits
+        and removed rows are preserved.
+      </p>
+      <button
+        disabled={working}
+        onClick={async () => {
+          setWorking(true);
+          await run(async () => {
+            const attempts = await api<any[]>(`/documents/${doc.id}/attempts`);
+            const latest = [...attempts]
+              .reverse()
+              .find((a) => a.result.comparison);
+            if (!latest)
+              throw new Error(
+                "No comparison yet. Retry extraction and wait for it to finish.",
+              );
+            setComparison(
+              await api(
+                `/documents/${doc.id}/attempts/${latest.id}/comparison`,
+              ),
+            );
+            setSelected([]);
+          });
+          setWorking(false);
+        }}
+      >
+        Compare extraction
+      </button>
+      {comparison && (
+        <>
+          <h4>Extraction comparison</h4>
+          <p>
+            Only selected missing rows will be added. Matches include earlier
+            versions of edited rows.
+          </p>
+          {comparison.proposals.map((p: any) => (
+            <div className="history-match" key={p.index}>
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  disabled={Boolean(p.existing) || p.applied || working}
+                  checked={selected.includes(p.index)}
+                  onChange={(e) =>
+                    setSelected((old) =>
+                      e.target.checked
+                        ? [...old, p.index]
+                        : old.filter((i) => i !== p.index),
+                    )
+                  }
+                />
+                Page {p.data.page}: {p.data.payee || "Unknown payee"} ·{" "}
+                {money(p.data.amount_minor)} ·{" "}
+                {p.data.date || "No payment date"}
+              </label>
+              <span>{p.data.source}</span>
+              <span>
+                {p.existing
+                  ? `Saved: ${p.existing.data.payee || "Unknown payee"} · ${money(p.existing.data.amount_minor)} · ${p.existing.data.date || "No date"} · ${p.existing.status}`
+                  : p.applied
+                    ? "Previously added"
+                    : "No matching saved row"}
+              </span>
+            </div>
+          ))}
+          <button
+            disabled={!selected.length || working}
+            onClick={async () => {
+              setWorking(true);
+              await run(async () => {
+                setComparison(
+                  await post(
+                    `/documents/${doc.id}/attempts/${comparison.attempt_id}/comparison`,
+                    { revision: comparison.revision, indices: selected },
+                  ),
+                );
+                setSelected([]);
+              }, "Selected rows added to Needs review.");
+              setWorking(false);
+            }}
+          >
+            Add selected missing rows
+          </button>
+        </>
+      )}
+    </section>
+  );
+}
+
+function ReferenceBackups({ run }: { run: Run }) {
+  const [reference, setReference] = useState<any>(null);
+  const [notice, setNotice] = useState("");
+  const refresh = async () => setReference(await api("/reference-exports"));
+  useEffect(() => {
+    refresh().catch((e) => run(() => Promise.reject(e)));
+  }, []);
+  return (
+    <>
+      <label className="file-button">
+        Import QIF export
+        <input
+          type="file"
+          accept=".qif,.QIF"
+          onChange={async (e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (!file) return;
+            await run(async () => {
+              const body = new FormData();
+              body.append("file", file);
+              if (reference)
+                body.append("expected_digest", reference.digest || "empty");
+              const result = await api("/catalog", { method: "POST", body });
+              setNotice(
+                result.status === "active"
+                  ? "QIF backed up and active for duplicate checks."
+                  : `QIF backed up. ${result.note || "This version is already archived."}`,
+              );
+              await refresh();
+            });
+          }}
+        />
+      </label>
+      {notice && <p>{notice}</p>}
+      <p className="muted small">
+        The Windows companion can watch a QIF export file and sync changes.
+        Export all accounts and dates from Quicken to keep duplicate checks
+        current. QIF backups do not replace Quicken's full data-file backups.
+      </p>
+      <button onClick={() => run(refresh)}>Refresh backup history</button>
+      {reference?.exports.map((item: any) => (
+        <div className="history-match" key={item.sha256}>
+          <strong>
+            {item.name} ·{" "}
+            {item.status === "needs_review" ? "Needs review" : item.status}
+          </strong>
+          <span>
+            Received {new Date(item.created * 1000).toLocaleString()} ·{" "}
+            {item.coverage.total} transactions · {item.source}
+          </span>
+          {item.note && <p>{item.note}</p>}
+          <a href={`/api/reference-exports/${item.sha256}/original`}>
+            Download backup
+          </a>
+          {item.status !== "active" && (
+            <button
+              onClick={() =>
+                run(async () => {
+                  await post(`/reference-exports/${item.sha256}/activate`, {
+                    expected_digest: reference.digest || "empty",
+                  });
+                  await refresh();
+                }, "Selected backup is now used for duplicate checks.")
+              }
+            >
+              Use this export after review
+            </button>
+          )}
+        </div>
+      ))}
     </>
   );
 }
@@ -1532,11 +1828,17 @@ function Settings({ catalog, run }: { catalog: Catalog; run: Run }) {
                 <select
                   value={config.protocol}
                   onChange={(e) =>
-                    setConfig({ ...config, protocol: e.target.value })
+                    setConfig({
+                      ...config,
+                      protocol: e.target.value,
+                      base_path:
+                        e.target.value === "lm-studio" ? "/api/v1" : "/v1",
+                    })
                   }
                 >
                   <option value="chat-completions">Chat completions</option>
                   <option value="responses">Responses</option>
+                  <option value="lm-studio">LM Studio native</option>
                 </select>
               </label>
               <label>
@@ -1621,7 +1923,37 @@ function Settings({ catalog, run }: { catalog: Catalog; run: Run }) {
                 Remove the stored API key
               </label>
             )}
+            {config.protocol === "lm-studio" && (
+              <label>
+                Model reasoning
+                <select
+                  value={config.reasoning || "default"}
+                  onChange={(e) =>
+                    setConfig({ ...config, reasoning: e.target.value })
+                  }
+                >
+                  <option value="default">Model default</option>
+                  <option value="off">Off</option>
+                  <option value="on">On</option>
+                </select>
+              </label>
+            )}
             <div className="form-two">
+              <label>
+                Model output limit · tokens
+                <input
+                  type="number"
+                  min="2000"
+                  max="32000"
+                  value={config.output_limit || 12000}
+                  onChange={(e) =>
+                    setConfig({
+                      ...config,
+                      output_limit: Number(e.target.value),
+                    })
+                  }
+                />
+              </label>
               <label>
                 Timeout · seconds
                 <input
@@ -1707,29 +2039,7 @@ function Settings({ catalog, run }: { catalog: Catalog; run: Run }) {
             <strong>{catalog.tags.length}</strong> tags
           </span>
         </div>
-        <label className="file-button">
-          Import QIF export
-          <input
-            type="file"
-            accept=".qif,.QIF"
-            onChange={async (e) => {
-              const file = e.target.files?.[0];
-              if (file) {
-                const body = new FormData();
-                body.append("file", file);
-                await run(
-                  () => api("/catalog", { method: "POST", body }),
-                  "Quicken reference catalog imported.",
-                );
-              }
-              e.target.value = "";
-            }}
-          />
-        </label>
-        <p className="muted small">
-          Refreshes reference data only. Existing Quicken transactions are not
-          modified.
-        </p>
+        <ReferenceBackups run={run} />
         {catalog.coverage && (
           <div className="reference-coverage">
             <h3>Imported transaction coverage</h3>

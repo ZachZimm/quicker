@@ -10,7 +10,7 @@ from .contracts import ModelConfig
 from .db import Candidate, Database, Document, ExtractionAttempt, Job
 from .documents import model_settings, pages_for, prepare_image
 from .extraction import ModelError, VisionAdapter
-from .review import create_candidates
+from .review import create_candidates, proposals
 
 
 def process_one(db, adapter_factory=VisionAdapter):
@@ -55,13 +55,18 @@ def process_one(db, adapter_factory=VisionAdapter):
         if job.claim != claim:
             return True  # An expired worker must never publish over a newer claim.
         doc = session.get(Document, doc_id)
+        payload = {"error": error} if error else result.model_dump(mode="json")
+        has_rows = session.scalar(select(Candidate.id).where(Candidate.document_id == doc_id).limit(1))
+        if not error and has_rows:
+            proposed, ignored = proposals(session, result)
+            payload.update(comparison=proposed, ignored=ignored, applied=[])
         session.add(
             ExtractionAttempt(
                 id=str(uuid4()),
                 document_id=doc_id,
                 created=int(time.time()),
                 config_revision=config.revision,
-                result={"error": error} if error else result.model_dump(mode="json"),
+                result=payload,
             )
         )
         if error:
@@ -71,7 +76,7 @@ def process_one(db, adapter_factory=VisionAdapter):
             doc.error = error
         else:
             # Retried jobs cannot replace reviewed or removed rows.
-            if not session.scalar(select(Candidate.id).where(Candidate.document_id == doc_id).limit(1)):
+            if not has_rows:
                 doc.ignored = create_candidates(session, doc_id, result)
             doc.status, doc.error, job.status = "ready", None, "done"
     return True
