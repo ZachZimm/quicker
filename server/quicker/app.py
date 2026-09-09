@@ -263,7 +263,7 @@ def create_app(database=None):
                     "counts": {
                         key: len(ref[key]) for key in ("accounts", "categories", "tags", "payees", "history")
                     },
-                    "active_coverage": ref["coverage"],
+                    "active_coverage": ref.get("coverage") or coverage(ref),
                 }
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from exc

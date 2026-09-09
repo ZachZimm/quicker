@@ -194,3 +194,41 @@ def test_browser_corrections_and_existing_link(browser_url, auth, db, photo):
         assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
         assert not errors
         browser.close()
+
+
+def test_http_lan_upload_and_repeated_manual_corrections(browser_url, db, photo):
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True, args=[
+            "--host-resolver-rules=MAP quicker.test 127.0.0.1", "--no-proxy-server",
+        ])
+        page = browser.new_page()
+        errors = []
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.goto(browser_url.replace("127.0.0.1", "quicker.test"))
+        assert page.evaluate("isSecureContext") is False
+        assert page.evaluate("typeof crypto.randomUUID") == "undefined"
+        page.get_by_label("Username", exact=True).fill("admin")
+        page.get_by_label("Password", exact=True).fill("test-password-12345")
+        page.get_by_role("button", name="Sign in", exact=True).click()
+        page.get_by_role("button", name="Upload documents", exact=True).first.click()
+        page.locator("input[type=file]").set_input_files(
+            {"name": "lan-invoice.png", "mimeType": "image/png", "buffer": photo}
+        )
+        page.get_by_role("button", name="Upload 1 photo", exact=True).click()
+        expect(page.get_by_role("heading", name="Source documents")).to_be_visible()
+        assert process_one(db, InvoiceAdapter)
+        page.get_by_role("button", name="Open document", exact=False).first.click()
+        for source in ("First missed receipt", "Second missed receipt"):
+            page.get_by_label("Source description", exact=True).fill(source)
+            page.get_by_role("button", name="Add missed transaction", exact=True).click()
+            expect(page.get_by_label("Source description", exact=True)).to_have_value("")
+        from quicker.db import Candidate
+        from sqlalchemy import select
+        with db.session() as session:
+            rows = list(session.scalars(select(Candidate)))
+            assert len(rows) == 3
+            assert {r.data["source"] for r in rows if r.data.get("manual")} == {
+                "First missed receipt", "Second missed receipt",
+            }
+        assert not errors
+        browser.close()

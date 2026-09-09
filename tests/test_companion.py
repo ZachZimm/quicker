@@ -145,3 +145,42 @@ def test_real_server_companion_sync_roundtrip(browser_url, auth, tmp_path, photo
     assert auth.get("/api/devices").json()[0]["pending_archives"] == 0
     assert all(checksum.read_bytes() == photo for checksum in engine.archive_dir.glob("*.png"))
     engine.http.close()
+
+
+def test_export_receipt_rechecks_server_after_restore_without_reactivating_archived(tmp_path):
+    source = tmp_path / "reference.QIF"
+    content = b"!Account\nNExample\nTBank\n^\n"
+    source.write_bytes(content)
+    sha = hashlib.sha256(content).hexdigest()
+    remote = []
+    uploads = []
+    reads = []
+
+    def handler(request):
+        assert request.url.path == "/api/device/reference"
+        if request.method == "GET":
+            reads.append(True)
+            return httpx.Response(200, json={"digest": "current", "exports": remote})
+        assert content in request.content
+        uploads.append(True)
+        receipt = {"sha256": sha, "status": "active"}
+        remote.append(receipt)
+        return httpx.Response(200, json=receipt)
+
+    engine = make_engine(tmp_path, handler)
+    engine.qif_path = source
+    try:
+        engine.sync_export()  # Wait for a stable file.
+        engine.sync_export()
+        assert len(uploads) == 1
+        remote[0]["status"] = "archived"
+        engine.sync_export()
+        assert len(uploads) == 1  # An archived backup is already present.
+        remote.clear()  # Older server backup restored; local journal survives.
+        engine.sync_export()
+        assert len(uploads) == 2 and remote[0]["sha256"] == sha
+        engine.sync_export()
+        assert len(uploads) == 2 and len(reads) == 4
+        assert source.read_bytes() == content
+    finally:
+        engine.http.close()

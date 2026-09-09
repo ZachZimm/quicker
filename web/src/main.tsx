@@ -18,7 +18,14 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { api, post, setCsrf, upload, fieldsOnly } from "./api";
+import {
+  api,
+  post,
+  setCsrf,
+  upload,
+  fieldsOnly,
+  requestId as newRequestId,
+} from "./api";
 import type {
   Catalog,
   DocumentRecord,
@@ -1563,7 +1570,7 @@ function Documents({
 function DocumentCorrections({ doc, run }: { doc: DocumentRecord; run: Run }) {
   const [page, setPage] = useState(1);
   const [source, setSource] = useState("");
-  const [requestId, setRequestId] = useState(() => crypto.randomUUID());
+  const [requestId, setRequestId] = useState(() => newRequestId());
   const [comparison, setComparison] = useState<any>(null);
   const [selected, setSelected] = useState<number[]>([]);
   const [working, setWorking] = useState(false);
@@ -1613,7 +1620,7 @@ function DocumentCorrections({ doc, run }: { doc: DocumentRecord; run: Run }) {
             )
           ) {
             setSource("");
-            setRequestId(crypto.randomUUID());
+            setRequestId(newRequestId());
             setComparison(null);
           }
           setWorking(false);

@@ -260,3 +260,22 @@ def test_first_device_export_can_initialize_empty_reference(auth, db):
         files={"file": ("first.QIF", export().encode())},
     )
     assert response.status_code == 200 and response.json()["status"] == "active"
+
+
+def test_first_held_export_returns_review_status_and_empty_active_coverage(auth, db):
+    from quicker.db import Setting
+
+    with db.write() as session:
+        session.delete(session.get(Setting, "catalog"))
+    content = export(day="invalid").encode()
+    for _ in range(2):
+        response = auth.post("/api/catalog", files={"file": ("held.QIF", content)})
+        assert response.status_code == 200
+        result = response.json()
+        assert result["status"] == "needs_review"
+        assert result["coverage"]["invalid_dates"] == 1
+        assert result["active_coverage"]["total"] == 0
+        assert result["counts"]["history"] == 0
+    reference = auth.get("/api/reference-exports").json()
+    assert reference["digest"] == "empty" and len(reference["exports"]) == 1
+    assert auth.get(f"/api/reference-exports/{result['sha256']}/original").content == content

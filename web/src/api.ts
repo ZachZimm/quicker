@@ -1,3 +1,15 @@
+// randomUUID is unavailable on HTTP LAN origins; getRandomValues is supported.
+export function requestId(): string {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 export let csrf = "";
 export function setCsrf(value: string) {
   csrf = value;
@@ -39,7 +51,7 @@ export function upload(
     const body = new FormData();
     files.forEach((file) => body.append("files", file));
     body.append("grouped", String(grouped));
-    body.append("request_id", crypto.randomUUID());
+    body.append("request_id", requestId());
     const request = new XMLHttpRequest();
     request.open("POST", "/api/upload");
     request.setRequestHeader("X-CSRF-Token", csrf);

@@ -186,12 +186,15 @@ class Companion:
         if stamp != (after.st_size, after.st_mtime_ns):
             return
         sha = hashlib.sha256(content).hexdigest()
-        with sqlite3.connect(self.journal_path) as journal:
-            if journal.execute(
-                "SELECT 1 FROM exports WHERE scope=? AND sha=?", (self.server_scope, sha)
-            ).fetchone():
-                return
         current = self.request("GET", "/api/device/reference")
+        with sqlite3.connect(self.journal_path) as journal:
+            acknowledged = journal.execute(
+                "SELECT 1 FROM exports WHERE scope=? AND sha=?", (self.server_scope, sha)
+            ).fetchone()
+        # A server restore can lose a snapshot while retaining the device token.
+        # Archived and held versions still count as stored; do not reactivate them.
+        if acknowledged and any(export["sha256"] == sha for export in current["exports"]):
+            return
         result = self.request(
             "POST",
             "/api/device/reference",
