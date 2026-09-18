@@ -58,7 +58,7 @@ def main():
             layout.addWidget(title)
             layout.addWidget(QLabel("Upload your input folder and archive every document from the server."))
             form = QFormLayout()
-            self.server = QLineEdit(self.config.get("server", "http://localhost:8765"))
+            self.server = QLineEdit(self.config.get("server", "http://localhost:8999"))
             self.code = QLineEdit()
             self.code.setEchoMode(QLineEdit.Password)
             self.input = QLineEdit(self.config.get("input", str(Path.home() / "Documents" / "Quicker Input")))

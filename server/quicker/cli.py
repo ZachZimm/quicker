@@ -20,7 +20,7 @@ def main():
     setup.add_argument("--username", default="admin")
     serve = commands.add_parser("serve")
     serve.add_argument("--host", default="127.0.0.1")
-    serve.add_argument("--port", type=int, default=8765)
+    serve.add_argument("--port", type=int, default=8999)
     commands.add_parser("migrate")
     qif = commands.add_parser("import-qif")
     qif.add_argument("path")

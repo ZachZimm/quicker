@@ -5,5 +5,5 @@ quicker.home.arpa {
     request_body {
         max_size 160MB
     }
-    reverse_proxy 127.0.0.1:8765
+    reverse_proxy 127.0.0.1:8999
 }

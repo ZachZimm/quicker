@@ -22,7 +22,7 @@ npm --prefix web run build
 cp .env.example .env
 uv run quicker setup --username admin
 uv run quicker import-qif /path/to/quicker-reference.QIF
-uv run quicker serve --host 0.0.0.0 --port 8765
+uv run quicker serve --host 0.0.0.0 --port 8999
 ```
 
 In another terminal, start the durable extraction worker:
@@ -31,7 +31,7 @@ In another terminal, start the durable extraction worker:
 uv run python -m quicker.worker
 ```
 
-Open `http://localhost:8765` on this computer, or use the Linux machine's LAN
+Open `http://localhost:8999` on this computer, or use the Linux machine's LAN
 address from another device. The development server uses HTTP. For the planned
 HTTPS deployment, use the reverse-proxy configuration below.
 
@@ -335,7 +335,7 @@ uv run ruff check server client tests
 ```
 
 `npm --prefix web run dev` provides frontend hot reload and proxies `/api` to
-port 8765. Database migrations ship with the Python package; use `quicker migrate`
+port 8999. Database migrations ship with the Python package; use `quicker migrate`
 or server startup to apply them. `alembic revision --autogenerate -m "…"` creates
 new migration drafts; inspect them before applying.
 
