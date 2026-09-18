@@ -25,6 +25,13 @@ Starting revision: `870746d`. Implementation is maintained on `main`.
 - Browser and Windows actions share one durable run protocol. Claims lock exact
   approved revisions; attempts are journaled before submission. Restart and lost
   response tests reconcile fresh exports without resending transactions.
+- Production deployment verified after the Linux server/worker restart. The running
+  packaged companion completed two fresh exports of the original data file through
+  the deployed API. Both contained 1,262 transactions across 36 accounts, with no
+  test transactions. Local bytes matched the server checksum. The second export
+  had identical bytes but a distinct event ID and advanced reference generation
+  from 1 to 2. No archive pages remained pending. No production entries were made;
+  the workspace had no approved rows.
 
 ## Validation
 
@@ -37,7 +44,7 @@ consistency pass. Private logs, exports and isolated databases remain in `.local
 
 ## Linux deployment
 
-The user will deploy the matching server changes. In the Linux repository:
+The matching server changes are deployed and verified. For future updates, in the Linux repository:
 
 ```bash
 git fetch origin
@@ -51,8 +58,8 @@ npm --prefix web run build
 Restart the server and extraction worker with the existing launch/service setup.
 Keep the current environment and `QUICKER_DATA_DIR`; do not rerun account setup.
 Database migration runs automatically. Pairing remains valid; Windows automation
-controls become available when the server advertises protocol 1. A production
-refresh must then verify the live connection.
+controls become available when the server advertises protocol 1. The production
+refresh and unchanged-content freshness checks have passed with the packaged client.
 
 Windows build: `client/build.ps1` (use `-PythonPath` if no Python launcher exists).
 Executable: `client/dist/Quicker/Quicker.exe`; install the entire folder.
