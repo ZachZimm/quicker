@@ -1,6 +1,6 @@
 # Windows client status — September 17, 2026
 
-Starting revision: `870746d`. Implementation branch: `codex/windows-automation`.
+Starting revision: `870746d`. Implementation is maintained on `main`.
 
 ## Verified on Windows
 
@@ -41,7 +41,7 @@ The user will deploy the matching server changes. In the Linux repository:
 
 ```bash
 git fetch origin
-git switch codex/windows-automation
+git switch main
 git pull --ff-only
 uv sync --extra dev
 npm --prefix web ci
