@@ -5,9 +5,11 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import queue
 import re
 import sqlite3
 import threading
+import time
 from pathlib import Path
 from uuid import uuid4
 
@@ -37,6 +39,8 @@ class Companion:
         report=lambda message: None,
         transport=None,
         qif_path=None,
+        data_file=None,
+        status_report=lambda status: None,
     ):
         self.input_dir, self.archive_dir = Path(input_dir).resolve(), Path(archive_dir).resolve()
         if (
@@ -69,6 +73,20 @@ class Companion:
         self.report = report
         self.stable = {}
         self.stop = threading.Event()
+        self.status_report = status_report
+        self.commands = queue.Queue()
+        self.operations = None
+        self.protocol = 0
+        self.last_refresh = 0
+        self.last_desktop_message = None
+        if data_file:
+            from .desktop import WindowsQuicken
+            from .operations import Operations
+
+            self.operations = Operations(self, WindowsQuicken(data_file), state_dir)
+
+    def command(self, kind):
+        self.commands.put((kind, str(uuid4())))
 
     def request(self, method, path, **kwargs):
         response = self.http.request(method, path, **kwargs)
@@ -81,7 +99,44 @@ class Companion:
         return response.json()
 
     def heartbeat(self):
-        return self.request("POST", "/api/device/heartbeat")
+        body = {}
+        if self.operations:
+            adapter = self.operations.adapter
+            body = {"protocol": 1, "file_identity": adapter.identity, "file_name": adapter.path.name}
+            try:
+                adapter.ready()
+                body.update(ready=True, message="Quicken ready")
+            except Exception as exc:  # noqa: BLE001 - COM/Win32 readiness errors must not terminate archive sync
+                body.update(ready=False, message=str(exc))
+        result = self.request("POST", "/api/device/heartbeat", json=body)
+        self.protocol = result.get("protocol", 0)
+        self.status_report(
+            {"connected": True, "desktop": bool(self.operations) and self.protocol == 1, **result}
+        )
+        return result
+
+    def desktop_cycle(self):
+        if not self.operations or self.protocol != 1:
+            return
+        ops = self.operations
+        while not self.commands.empty():
+            kind, request_id = self.commands.get_nowait()
+            try:
+                ops.start(kind, request_id=request_id)
+            except Exception:
+                self.commands.put((kind, request_id))
+                raise
+        pending = self.request("GET", "/api/device/operations")
+        if not pending and time.time() - self.last_refresh > 900:
+            # Never steal focus on connect, on a timer, or while Quicken is in use.
+            ops.adapter.ready(background=True)
+            pending = [ops.start("refresh", background=True)]
+            self.last_refresh = time.time()
+        for run in pending:
+            if self.stop.is_set():
+                return
+            ops.process(run)
+            self.last_refresh = time.time()
 
     def ingest_file(self, source):
         source = Path(source)
@@ -198,7 +253,10 @@ class Companion:
         result = self.request(
             "POST",
             "/api/device/reference",
-            data={"expected_digest": current.get("digest") or "empty", "source_modified": str(before.st_mtime_ns)},
+            data={
+                "expected_digest": current.get("digest") or "empty",
+                "source_modified": str(before.st_mtime_ns),
+            },
             files={"file": (source.name, content, "application/octet-stream")},
         )
         if result.get("sha256") != sha or result.get("status") not in ("active", "archived", "needs_review"):
@@ -217,6 +275,14 @@ class Companion:
         )
 
     def cycle(self):
+        try:
+            self.desktop_cycle()
+            self.last_desktop_message = None
+        except Exception as exc:  # noqa: BLE001 - desktop adapter faults are isolated from archival
+            message = "Quicken: " + str(exc)
+            if message != self.last_desktop_message:
+                self.report(message)
+                self.last_desktop_message = message
         try:
             self.sync_export()
         except (OSError, RuntimeError, ValueError, sqlite3.Error, httpx.HTTPError):
@@ -253,9 +319,15 @@ class Companion:
                 try:
                     status = self.heartbeat()
                     self.report(
-                        f"Connected · {status['approved']} approved · Quicken entry not yet available"
+                        f"Connected · {status['approved']} approved · "
+                        + (
+                            "Quicken automation available"
+                            if self.operations and self.protocol == 1
+                            else "Configure the Quicken file and update the server for entry"
+                        )
                     )
                 except (OSError, RuntimeError, ValueError, sqlite3.Error, httpx.HTTPError):
+                    self.status_report({"connected": False, "desktop": False})
                     self.report(
                         "Connection unavailable. Check the server address or pair again if access was revoked."
                     )

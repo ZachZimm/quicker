@@ -5,10 +5,10 @@ card statements into reviewed transactions for Quicken. The browser is the main
 workspace; the Windows companion uploads a folder and synchronizes originals to
 a permanent archive.
 
-**Quicken entry is intentionally unfinished.**
-Entry buttons explain that limitation and cannot mark any transaction as entered.
-You can manually assign a property and account, edit, remove/restore, and approve
-transactions now.
+The Windows companion refreshes Quicken and enters approved transactions.
+It exports the complete reference before entry, atomically rechecks approvals,
+then verifies attempted transactions in another fresh export. Interrupted or
+ambiguous outcomes remain unresolved until reconciliation.
 
 ## Run on Linux
 
@@ -103,13 +103,32 @@ source before approval. No model output can initiate Quicken entry.
 
 ## Quicken export synchronization
 
-The companion watches the selected QIF file for stable changes, uploads exact
-bytes, verifies the server receipt and retains the local export. It does not
-create exports inside Quicken yet. Automated fresh export creation is required
-for the Windows implementation, before entry and again afterward for verification.
-It must include changes made outside Quicker. Until that is implemented, export
-all accounts and all dates manually to the watched file. See
-[WINDOWS_HANDOFF.md](WINDOWS_HANDOFF.md) for the next implementation task.
+Select the intended `.QDF` in the companion and open that file in Quicken.
+**Refresh from Quicken / reconcile** creates a new all-accounts, all-dates export
+with transactions and reference lists, including changes made outside Quicker.
+The companion refreshes on connection and every 15 minutes when the desktop
+has been idle for at least a minute and Quicken is not the foreground app.
+Background refresh defers while the desktop is in use, locked, or showing a dialog.
+The optional QIF watcher still backs up externally created files; a watched file
+never authorizes entry.
+
+**Enter approved transactions** is available in both apps after updating the
+server and configuring the companion. Keep the desktop idle while it works.
+Physical input, focus loss, an unexpected dialog, a changed data file, or a
+connection failure stops the operation. Each run claims exact approved revisions
+only after its fresh export activates. Entry uses single-transaction QIF imports
+and verifies account, date, amount, payee, category, expense tag, rental tag and
+unique memo reference afterward. Bank, Cash and CCard accounts are supported.
+Payees are limited to 63 characters and source memos to 36, leaving 27 characters
+for the verification reference. Unsupported values return to review with an
+explanation; they are never silently shortened.
+
+For uncertain outcomes, inspect Quicken and choose **Refresh from Quicken / reconcile**.
+The companion never repeats an attempted import. When a current export contains
+no verification reference, the browser can return the row to review after you
+confirm that it was not entered. Duplicate or mismatched references require
+correction in Quicken and another refresh. Preserve the companion's local state
+folder and journal when updating. See [WINDOWS_STATUS.md](WINDOWS_STATUS.md).
 
 Settings lists each distinct received version, its transaction coverage and a
 backup download. The CLI `import-qif` command uses the same versioned storage.
@@ -122,8 +141,9 @@ A QIF backup does not replace a full Quicken data-file backup.
 Rows linked as **Already in Quicken** cannot be approved for entry. If their match
 vanishes from a later active export, they return to review. Separate-transaction
 acknowledgements are bound to the duplicate evidence; new matches require review
-again. Future delivery code must use the server's `entry_eligible` result and
-recheck it when claiming work. Actual Quicken entry is still unimplemented.
+again. Delivery rechecks eligibility and revisions atomically when claiming work.
+Fresh export events have IDs separate from content hashes: unchanged exports still
+record freshness, while retrying an old event cannot reactivate it.
 
 ## LM Studio extraction
 

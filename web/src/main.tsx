@@ -84,22 +84,25 @@ function App() {
   const [rows, setRows] = useState<Transaction[]>([]);
   const [catalog, setCatalog] = useState<Catalog>(EMPTY);
   const [devices, setDevices] = useState<any[]>([]);
+  const [operations, setOperations] = useState<any[]>([]);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [uploader, setUploader] = useState(false);
 
   const reload = useCallback(async () => {
-    const [d, r, c, device] = await Promise.all([
+    const [d, r, c, device, operation] = await Promise.all([
       api("/documents"),
       api("/transactions"),
       api("/catalog"),
       api("/devices"),
+      api("/entry"),
     ]);
     setDocs(d);
     setRows(r);
     setCatalog(c);
     setDevices(device);
+    setOperations(operation);
   }, []);
   useEffect(() => {
     api("/session")
@@ -307,7 +310,12 @@ function App() {
           )}
           {tab === "settings" && <Settings catalog={catalog} run={run} />}
           {tab === "companion" && (
-            <Companion devices={devices} approved={approved} run={run} />
+            <Companion
+              devices={devices}
+              approved={approved}
+              run={run}
+              operations={operations}
+            />
           )}
         </div>
       </main>
@@ -430,7 +438,9 @@ function Review({
       (filter === "all" || r.status === filter) &&
       (r.data.payee || "").toLowerCase().includes(query.toLowerCase()),
   );
-  const chosen = visible.filter((r) => selected.has(r.id));
+  const chosen = visible.filter(
+    (r) => selected.has(r.id) && !["entering", "entered"].includes(r.status),
+  );
   const current = rows.find((r) => r.id === active);
   const doc = docs.find((d) => d.id === draft?.document_id);
   const properties = [...new Set(catalog.routes.map((r) => r.property))].sort();
@@ -507,6 +517,8 @@ function Review({
             ["review", "Needs review"],
             ["approved", "Approved"],
             ["existing", "Already in Quicken"],
+            ["entering", "Entry pending"],
+            ["entered", "Entered"],
             ["removed", "Removed"],
             ["all", "All"],
           ].map(([id, label]) => (
@@ -643,7 +655,14 @@ function Review({
                     onChange={(e) =>
                       setSelected(
                         new Set(
-                          e.target.checked ? visible.map((r) => r.id) : [],
+                          e.target.checked
+                            ? visible
+                                .filter(
+                                  (r) =>
+                                    !["entering", "entered"].includes(r.status),
+                                )
+                                .map((r) => r.id)
+                            : [],
                         ),
                       )
                     }
@@ -665,6 +684,7 @@ function Review({
                     <input
                       type="checkbox"
                       aria-label={`Select ${r.data.payee || "unknown payee"}`}
+                      disabled={["entering", "entered"].includes(r.status)}
                       checked={selected.has(r.id)}
                       onChange={() => toggle(r.id)}
                     />
@@ -730,7 +750,7 @@ function Review({
                           ? "Already in Quicken"
                           : r.status}
                     </span>
-                    {r.status !== "existing" &&
+                    {!["existing", "entered", "entering"].includes(r.status) &&
                       (r.duplicates.length > 0 ||
                         (r.historical_duplicates?.length || 0) > 0) && (
                         <small className="missing">Possible duplicate</small>
@@ -841,7 +861,9 @@ function Review({
                 )}
                 <fieldset
                   disabled={
-                    ["removed", "existing"].includes(draft.status) || busy
+                    ["removed", "existing", "entering", "entered"].includes(
+                      draft.status,
+                    ) || busy
                   }
                 >
                   <label>
@@ -1182,7 +1204,13 @@ function Review({
               </div>
             </div>
             <footer className="drawer-footer">
-              {["removed", "existing"].includes(draft.status) ? (
+              {["entering", "entered"].includes(draft.status) ? (
+                <p>
+                  {draft.status === "entered"
+                    ? "Verified in a fresh Quicken export."
+                    : "Entry is locked until reconciliation completes."}
+                </p>
+              ) : ["removed", "existing"].includes(draft.status) ? (
                 <button onClick={() => act("restore", [draft])}>
                   <RotateCcw size={16} /> Restore to review
                 </button>
@@ -2209,12 +2237,32 @@ function Companion({
   devices,
   approved,
   run,
+  operations,
 }: {
   devices: any[];
   approved: number;
   run: Run;
+  operations: any[];
 }) {
   const [code, setCode] = useState("");
+  const [requesting, setRequesting] = useState(false);
+  const [confirmed, setConfirmed] = useState<Record<string, boolean>>({});
+  const connected = devices.some(
+    (d) => d.connected && d.entry_supported && d.desktop?.file_identity,
+  );
+  const active = operations.find(
+    (r) => !["complete", "failed"].includes(r.status),
+  );
+  const request = async (kind: string) => {
+    setRequesting(true);
+    await run(
+      () => post("/entry", { request_id: newRequestId(), kind }),
+      kind === "entry"
+        ? "Entry requested. Keep Quicken open and the desktop idle."
+        : "Fresh export and reconciliation requested.",
+    );
+    setRequesting(false);
+  };
   return (
     <div className="settings-grid">
       <section className="panel">
@@ -2233,6 +2281,11 @@ function Companion({
                 {d.connected ? "Connected" : "Offline"} · {d.pending_archives}{" "}
                 documents awaiting archive sync
               </p>
+              {d.desktop?.file_name && (
+                <p>
+                  {d.desktop.file_name} · {d.desktop.message}
+                </p>
+              )}
             </div>
             <button
               onClick={() =>
@@ -2273,20 +2326,87 @@ function Companion({
           <span>approved and retained</span>
         </div>
         <p>
-          Quicken entry is not available in this version. Your approved
-          transactions remain saved here.
+          Each run refreshes Quicken first, rechecks approvals and duplicates,
+          and verifies entered transactions in another export. Keep Quicken open
+          with the configured data file and leave the desktop idle during entry.
         </p>
         <button
           className="primary"
-          disabled
-          title="Quicken integration has not been implemented"
+          disabled={!connected || !approved || !!active || requesting}
+          onClick={() => request("entry")}
         >
           Enter approved transactions <ArrowRight size={17} />
         </button>
         <p className="muted small">
-          When available, entry can be started here while the companion is
-          connected, or from its Windows button.
+          Entry supports Bank, Cash and credit card accounts. Payees may contain
+          up to 63 characters; memos up to 36, leaving room for a unique
+          verification reference. Unsupported rows return to review.
         </p>
+        <button
+          disabled={!connected || requesting}
+          onClick={() => request("refresh")}
+        >
+          <RefreshCw size={17} /> Refresh from Quicken / reconcile
+        </button>
+        {operations.slice(0, 5).map((operation) => (
+          <div className="device" key={operation.id}>
+            <div>
+              <strong>
+                {operation.kind === "entry" ? "Entry" : "Refresh"} ·{" "}
+                {operation.status.replaceAll("_", " ")}
+              </strong>
+              <p>{operation.message}</p>
+              <small>
+                {operation.file_name} ·{" "}
+                {new Date(operation.created * 1000).toLocaleString()}
+              </small>
+              {operation.skipped?.map((item: any) => (
+                <p key={item.id}>Not entered: {item.reason}</p>
+              ))}
+              {operation.items?.map((item: any) => (
+                <div key={item.id}>
+                  <p>
+                    {item.data.payee} · {money(item.data.amount_minor)} ·{" "}
+                    {item.state}
+                  </p>
+                  {item.state === "uncertain" && item.marker_count === 0 && (
+                    <>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={!!confirmed[item.id]}
+                          onChange={(e) =>
+                            setConfirmed({
+                              ...confirmed,
+                              [item.id]: e.target.checked,
+                            })
+                          }
+                        />
+                        I inspected Quicken and confirmed this transaction was
+                        not entered.
+                      </label>
+                      <button
+                        disabled={!confirmed[item.id]}
+                        onClick={() =>
+                          run(
+                            () =>
+                              post(
+                                `/entry/${operation.id}/resolve/${item.id}`,
+                                { confirmed_not_entered: true },
+                              ),
+                            "Returned to review; approve again only after checking the source.",
+                          )
+                        }
+                      >
+                        Return to review
+                      </button>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
       </section>
     </div>
   );

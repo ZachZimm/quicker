@@ -1,5 +1,9 @@
 # Windows implementation handoff
 
+The workflow below is implemented on the Windows target. This document remains
+the original requirements contract. See [WINDOWS_STATUS.md](WINDOWS_STATUS.md)
+for validation results, operational limits and deployment instructions.
+
 ## Objective
 
 Implement and validate the companion's Quicken automation on the Windows machine.

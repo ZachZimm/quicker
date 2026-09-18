@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Annotated
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import Body, Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -33,6 +33,8 @@ from .db import (
     Setting,
     User,
 )
+from .desktop import capability
+from .desktop import install as install_desktop
 from .documents import MAX_FILE_BYTES, ingest, model_settings, pages_for, prepare_image, serialize_page
 from .extraction import ModelError, VisionAdapter
 from .profile import PREFERRED_CATEGORIES, canonical_property, property_directory
@@ -478,7 +480,8 @@ def create_app(database=None):
                     "name": d.name,
                     "connected": d.heartbeat > time.time() - 30,
                     "heartbeat": d.heartbeat,
-                    "entry_supported": False,
+                    "entry_supported": capability(session, d.id).get("protocol") == 1,
+                    "desktop": capability(session, d.id),
                     "pending_archives": len(list(session.scalars(select(Page.id))))
                     - len(
                         list(
@@ -535,15 +538,28 @@ def create_app(database=None):
         return auth["device_id"]
 
     @app.post("/api/device/heartbeat")
-    def heartbeat(auth: Auth):
+    def heartbeat(auth: Auth, body: Annotated[dict | None, Body()] = None):
         device_id = require_device(auth)
         with db.write() as session:
             session.get(Device, device_id).heartbeat = int(time.time())
+            if body is not None:
+                safe = {
+                    key: body[key]
+                    for key in ("protocol", "file_identity", "file_name", "ready", "message")
+                    if key in body
+                }
+                state = session.get(Setting, "desktop:" + device_id)
+                if state:
+                    state.value = safe
+                else:
+                    session.add(Setting(key="desktop:" + device_id, value=safe))
             count = len(list(session.scalars(select(Candidate.id).where(Candidate.status == "approved"))))
+            entry_supported = capability(session, device_id).get("protocol") == 1
         return {
             "approved": count,
-            "entry_supported": False,
-            "entry_message": "Quicken entry is not implemented yet. Approved transactions remain in review storage.",
+            "entry_supported": entry_supported,
+            "protocol": 1,
+            "entry_message": "Ready for the updated Windows companion",
         }
 
     @app.get("/api/device/archive")
@@ -567,13 +583,7 @@ def create_app(database=None):
                 session.add(ArchiveReceipt(device_id=device_id, page_id=page.id, received=int(time.time())))
         return {"ok": True}
 
-    @app.post("/api/entry")
-    def enter(auth: Auth):
-        # Deliberately no delivery state is mutated until a real Quicken adapter exists.
-        raise HTTPException(
-            501,
-            "Quicken entry is not implemented yet. Approved transactions have not been entered or changed.",
-        )
+    install_desktop(app, db, authenticated, require_device)
 
     web_dist = Path(os.environ.get("QUICKER_WEB_DIST", Path(__file__).resolve().parents[2] / "web" / "dist"))
     if web_dist.exists():

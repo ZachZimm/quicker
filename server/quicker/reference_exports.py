@@ -3,6 +3,7 @@
 from pathlib import Path
 from time import time
 
+from quicker_client.qif import decode_qif
 from sqlalchemy import select
 
 from .catalog import catalog, import_catalog, parse_qif
@@ -20,8 +21,14 @@ def describe(export):
 
 
 def reference_status(session):
+    from .desktop import generation
+
     exports = list(session.scalars(select(ReferenceExport).order_by(ReferenceExport.created.desc())))
-    return {"digest": catalog(session).get("digest") or "empty", "exports": [describe(e) for e in exports]}
+    return {
+        "digest": catalog(session).get("digest") or "empty",
+        "generation": generation(session),
+        "exports": [describe(e) for e in exports],
+    }
 
 
 def reduced_coverage(previous, current):
@@ -40,7 +47,7 @@ def reduced_coverage(previous, current):
 
 
 def activate(session, db, export):
-    content = (db.blobs / export.sha256).read_bytes().decode("utf-8-sig", errors="replace")
+    content = decode_qif((db.blobs / export.sha256).read_bytes())
     ref = import_catalog(session, content)
     for other in session.scalars(select(ReferenceExport).where(ReferenceExport.status == "active")):
         other.status = "archived"
@@ -54,7 +61,7 @@ def store_export(db, content, name, source="browser", expected_digest=None, sour
         raise ValueError("QIF export must be between 1 byte and 10 MB")
     if source_modified is not None and (not source_modified.isdigit() or len(source_modified) > 30):
         raise ValueError("Source modification time must be a nonnegative integer")
-    ref = parse_qif(content.decode("utf-8-sig", errors="replace"))
+    ref = parse_qif(decode_qif(content))
     sha = durable_blob(db, content)
     with db.write() as session:
         existing = session.get(ReferenceExport, sha)

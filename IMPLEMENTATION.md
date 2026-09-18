@@ -1,8 +1,8 @@
 # Implementation status
 
-The first implementation covers document ingestion through manual approval and
-permanent archival. Verified parcel and rental-unit assignments are implemented;
-Quicken interaction remains unfinished.
+The implementation covers ingestion, review, archival and Windows Quicken entry
+with fresh reference exports and durable reconciliation. WINDOWS_STATUS.md records
+the September 17 target-machine validation and deployment instructions.
 
 ## Implemented
 
@@ -61,8 +61,11 @@ Quicken interaction remains unfinished.
   checksum-verified local archives, resumable downloads, heartbeat, and tray
   behavior, plus optional QIF file watching and versioned server backup. The
   companion retains the local QIF file. Browser uploads also sync to the Windows archive after reconnection.
-- Browser and Windows entry buttons visibly disabled. The server entry endpoint
-  returns an explicit not-implemented response without mutating transactions.
+- Browser and Windows refresh/entry controls, serialized desktop automation,
+  distinct freshness events, atomic approval claims, write-ahead attempt journals,
+  and exact post-export verification. Uncertain outcomes cannot be blindly retried.
+- Windows packaging with isolated DLL discovery, intended-QDF checks,
+  physical-input takeover detection, single-instance app and desktop mutex.
 - Source installation instructions, Windows packaging script, systemd templates,
   local HTTPS reverse-proxy example, and database/original backup command.
 
@@ -125,29 +128,22 @@ samples; the saved workspace now uses that protocol and setting. This does not
 change the model server's global settings. The protocol remains selectable, and
 other models can keep their default reasoning mode.
 
-## Next Windows milestone
+## Windows implementation
 
-Automate creation of fresh, complete exports from the actual Quicken data file.
-The current passive file watcher does not create exports. The user requires
-synchronization to include transactions entered outside Quicker. Pre-entry
-export, duplicate revalidation and post-entry export/reconciliation are required;
-appending Quicker transactions to an old export is not sufficient.
-
-Implement export-event freshness alongside the desktop adapter, including fresh
-exports whose contents are unchanged. Then implement entry claims and recovery.
-[WINDOWS_HANDOFF.md](WINDOWS_HANDOFF.md) records the concrete sequence and tests
-for the Windows task. No Windows export or entry automation is claimed complete.
+The workflow in WINDOWS_HANDOFF.md is implemented. Native Quicken 27.1.69.29 tests
+used its disconnected copy/template feature and isolated server databases.
+Verified cases include both Bell rentals with expense/unit tags, whole-property
+expenses, a positive R&K refund, and the exact R&K Properties account with
+Insurance (Business):Truck. The original data file was reopened after testing.
+See WINDOWS_STATUS.md for results and operational limits.
 
 ## Deliberately unfinished or not verified here
 
 - Some physical rental-to-Quicken-tag mappings remain unresolved, including the
   two Bell WM locations. Only supported identities receive automatic unit tags.
-- Actual Quicken entry, desktop readiness checks, delivery-run state, and
-  reconciliation of uncertain Quicken outcomes. No imported/entered success can
-  be reported by the current placeholder.
-- Windows-native executable packaging and operation on the target Windows
-  computer. The packaging script is provided; core sync and the Qt window were
-  tested on Linux.
+- Other Quicken versions and languages have not been validated; unexpected
+  layouts/dialogs fail closed. Supported entry types and length limits are
+  documented in WINDOWS_STATUS.md.
 - systemd/Caddy installation and certificate trust on client devices. Development
   processes run directly, with an HTTP LAN preview. Persistent HTTPS deployment
   is documented but not installed automatically.

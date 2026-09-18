@@ -192,6 +192,11 @@ def import_catalog(session, content):
     else:
         session.add(Setting(key="catalog", value=ref))
     session.flush()
+    generation = session.get(Setting, "reference_generation")
+    if generation:
+        generation.value = {"value": generation.value["value"] + 1}
+    else:
+        session.add(Setting(key="reference_generation", value={"value": 1}))
     if previous.get("digest") != ref["digest"]:
         from .review import reconcile_reference
 

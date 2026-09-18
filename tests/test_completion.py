@@ -163,7 +163,7 @@ def test_companion_qif_sync_real_server_retains_source_and_retries_idempotently(
     code = auth.post("/api/pair-code").json()["code"]
     paired = httpx.post(browser_url + "/api/pair", json={"name": "QIF sync test", "code": code}).json()
     source = tmp_path / "reference.QIF"
-    source.write_text(export())
+    source.write_bytes(export().encode())
     engine = Companion(
         browser_url,
         paired["token"],

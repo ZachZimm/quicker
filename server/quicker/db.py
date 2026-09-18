@@ -148,6 +148,23 @@ class ReferenceExport(Base):
     coverage: Mapped[dict] = mapped_column(JSON)
 
 
+class DesktopRun(Base):
+    __tablename__ = "desktop_runs"
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    device_id: Mapped[str] = mapped_column(ForeignKey("devices.id"), index=True)
+    status: Mapped[str] = mapped_column(String)
+    created: Mapped[int] = mapped_column(Integer)
+    payload: Mapped[dict] = mapped_column(JSON)
+
+
+class ExportEvent(Base):
+    __tablename__ = "export_events"
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    device_id: Mapped[str] = mapped_column(ForeignKey("devices.id"))
+    sha256: Mapped[str] = mapped_column(ForeignKey("reference_exports.sha256"))
+    payload: Mapped[dict] = mapped_column(JSON)
+
+
 class Database:
     def __init__(self, directory: str | Path | None = None):
         self.directory = Path(directory or os.environ.get("QUICKER_DATA_DIR", "data")).resolve()

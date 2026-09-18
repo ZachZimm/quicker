@@ -7,6 +7,43 @@ from quicker.worker import process_one
 from test_workflow import InvoiceAdapter
 
 
+def test_browser_requests_entry_and_displays_verified_result(browser_url, auth, db, tmp_path):
+    from quicker_client.operations import Operations
+    from test_desktop_operations import FILE, ApiCompanion, FakeQuicken, candidate
+
+    candidate(db)
+    code = auth.post("/api/pair-code").json()["code"]
+    pair = auth.post("/api/pair", json={"name": "Windows test", "code": code}).json()
+    header = {"Authorization": "Bearer " + pair["token"]}
+    auth.post("/api/device/heartbeat", headers=header, json={"protocol": 1, "file_identity": FILE, "file_name": "test.QDF", "ready": True})
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 1440, "height": 1000})
+        page.goto(browser_url)
+        page.get_by_label("Username", exact=True).fill("admin")
+        page.get_by_label("Password", exact=True).fill("test-password-12345")
+        page.get_by_role("button", name="Sign in", exact=True).click()
+        page.get_by_role("button", name="Windows companion", exact=True).click()
+        button = page.get_by_role("button", name="Enter approved transactions", exact=False)
+        expect(button).to_be_enabled()
+        button.click()
+        expect(page.get_by_text("Waiting for Quicken", exact=True)).to_be_visible()
+        expect(button).to_be_disabled()
+        pending = auth.get("/api/device/operations", headers=header).json()
+        result = Operations(ApiCompanion(auth, header), FakeQuicken(), tmp_path).process(pending[0])
+        assert result["status"] == "complete"
+        page.reload()
+        page.get_by_role("button", name="Windows companion", exact=True).click()
+        expect(page.get_by_text("Fresh Quicken export verified", exact=True)).to_be_visible()
+        page.screenshot(path=".local/windows-entry-browser.png", full_page=True)
+        page.get_by_role("navigation", name="Main navigation").get_by_role("button", name="Review", exact=False).click()
+        page.get_by_role("tab", name="Entered", exact=False).click()
+        page.get_by_role("button", name="Desktop Test", exact=True).click()
+        expect(page.get_by_text("Verified in a fresh Quicken export.", exact=True)).to_be_visible()
+        expect(page.get_by_role("button", name="Save & approve")).to_have_count(0)
+        browser.close()
+
+
 def test_browser_upload_review_remove_restore_and_settings(browser_url, db, photo):
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)

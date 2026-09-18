@@ -12,7 +12,7 @@ def state_directory():
 
 
 def main():
-    from PySide6.QtCore import QObject, QTimer, Signal
+    from PySide6.QtCore import QLockFile, QObject, QTimer, Signal
     from PySide6.QtWidgets import (
         QApplication,
         QFileDialog,
@@ -36,6 +36,7 @@ def main():
     class Events(QObject):
         message = Signal(str)
         paired = Signal(dict)
+        status = Signal(dict)
 
     class Window(QMainWindow):
         def __init__(self):
@@ -48,6 +49,7 @@ def main():
             self.events = Events()
             self.events.message.connect(self.log_message)
             self.events.paired.connect(self.finish_pair)
+            self.events.status.connect(self.connection_status)
             self.state_dir = state_directory()
             self.state_dir.mkdir(parents=True, exist_ok=True)
             self.config_path = self.state_dir / "config.json"
@@ -81,6 +83,13 @@ def main():
             qif_browse.clicked.connect(self.browse_qif)
             qif_row.addWidget(qif_browse)
             form.addRow("Quicken QIF export", qif_row)
+            self.data_file = QLineEdit(self.config.get("data_file", ""))
+            data_row = QHBoxLayout()
+            data_row.addWidget(self.data_file)
+            data_browse = QPushButton("Browse…")
+            data_browse.clicked.connect(self.browse_data)
+            data_row.addWidget(data_browse)
+            form.addRow("Quicken data file", data_row)
             layout.addLayout(form)
             layout.addWidget(
                 QLabel(
@@ -100,10 +109,17 @@ def main():
             layout.addLayout(buttons)
             self.entry = QPushButton("Enter approved transactions")
             self.entry.setEnabled(False)
-            self.entry.setToolTip("Quicken interaction is not implemented in this version")
+            self.entry.clicked.connect(lambda: self.command("entry"))
             layout.addWidget(self.entry)
+            self.refresh = QPushButton("Refresh from Quicken / reconcile")
+            self.refresh.setEnabled(False)
+            self.refresh.clicked.connect(lambda: self.command("refresh"))
+            layout.addWidget(self.refresh)
             layout.addWidget(
-                QLabel("Quicken entry is not available yet. Approval and archives remain saved.")
+                QLabel(
+                    "Open the selected data file in Quicken. Entry verifies fresh exports before and after.\n"
+                    "Keep the desktop idle during automation. Physical input stops the operation."
+                )
             )
             self.log = QTextEdit()
             self.log.setReadOnly(True)
@@ -134,6 +150,27 @@ def main():
             if selected:
                 self.qif.setText(selected)
 
+        def browse_data(self):
+            selected, _ = QFileDialog.getOpenFileName(
+                self, "Choose Quicken data file", self.data_file.text(), "Quicken data (*.QDF *.qdf)"
+            )
+            if selected:
+                self.data_file.setText(selected)
+
+        def connection_status(self, status):
+            ready = status.get("desktop", False) and not (self.engine and self.engine.stop.is_set())
+            self.entry.setEnabled(ready)
+            self.refresh.setEnabled(ready)
+
+        def command(self, kind):
+            if self.engine and not self.engine.stop.is_set():
+                self.engine.command(kind)
+                self.log_message(
+                    "Requested "
+                    + ("approved entry" if kind == "entry" else "fresh export and reconciliation")
+                    + ". Keep Quicken open and the desktop idle."
+                )
+
         def log_message(self, message):
             # Plain text prevents filenames or server messages from becoming rich text.
             self.log.append(message.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
@@ -144,6 +181,7 @@ def main():
                 input=self.input.text(),
                 archive=self.archive.text(),
                 qif_path=self.qif.text().strip(),
+                data_file=self.data_file.text().strip(),
             )
             temp = self.config_path.with_suffix(".tmp")
             temp.write_text(json.dumps(self.config, indent=2))
@@ -202,6 +240,8 @@ def main():
                     self.state_dir,
                     self.events.message.emit,
                     qif_path=self.config.get("qif_path"),
+                    data_file=self.config.get("data_file"),
+                    status_report=self.events.status.emit,
                 )
                 self.thread = threading.Thread(target=self.engine.run, daemon=True)
                 self.thread.start()
@@ -212,6 +252,8 @@ def main():
         def disconnect(self):
             if self.engine:
                 self.engine.stop.set()
+                self.entry.setEnabled(False)
+                self.refresh.setEnabled(False)
                 self.log_message("Stopping sync. Incomplete transfers will resume on reconnect.")
 
         def quit(self):
@@ -229,6 +271,13 @@ def main():
 
     app = QApplication(sys.argv)
     app.setApplicationName("Quicker")
+    state_directory().mkdir(parents=True, exist_ok=True)
+    lock = QLockFile(str(state_directory() / "companion.lock"))
+    if not lock.tryLock(0):
+        QMessageBox.information(
+            None, "Quicker is running", "Open the existing Quicker companion from the system tray."
+        )
+        return
     window = Window()
     window.show()
     sys.exit(app.exec())
