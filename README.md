@@ -212,17 +212,22 @@ Date changes do not select an older account. Review older-year expenses explicit
 if they should go to an older register.
 
 For a name absent from the account list, choose **Create … in Quicken** or press
-Enter and confirm the exact name and account type. Windows must be paired and
+Enter and confirm the exact name. New accounts are always Bank accounts; there is
+no account-type selector. Names may contain at most 39 characters, matching the
+verified Quicken import limit. Windows must be paired and
 configured for a Quicken file. Requests can wait while Windows is offline. The
 browser saves the requested account on the transaction but labels it pending;
 approval requires the account to appear in an imported Quicken account list.
 The request itself completes only after a fresh Windows export verifies creation.
 Requests do not insert invented accounts into the reference catalog.
 
-The Windows creation adapter still needs implementation. Current clients leave
-these requests queued with an explicit message. The API contract, recovery rules,
-and Windows testing steps are in [WINDOWS_ACCOUNT_CREATION.md](WINDOWS_ACCOUNT_CREATION.md).
-The existing transaction-entry protocol continues to handle verified accounts.
+The Windows companion creates the manual account using an account-only QIF import,
+without an opening-balance transaction or online connection. Fresh native exports
+before and after creation verify the exact name and Bank type. Older clients leave
+requests queued. Interrupted attempts are verified without repeating creation;
+if the account is absent, inspect Quicken and finish creating that exact account
+manually, then refresh. Keep the companion's journal when updating. The API
+contract and validation details are in [WINDOWS_ACCOUNT_CREATION.md](WINDOWS_ACCOUNT_CREATION.md).
 
 ## Rental units and shared expenses
 
@@ -364,8 +369,8 @@ To build a standalone Windows folder, run:
 ```
 
 Distribute the entire `client/dist/Quicker` folder, including `Quicker.exe`.
-Packaging must run on Windows. The core sync code is tested on Linux; a native
-Windows build/run still needs validation on the target computer.
+Packaging must run on Windows. Native validation results and the supported
+Quicken version are recorded in [WINDOWS_STATUS.md](WINDOWS_STATUS.md).
 
 ## Persistent deployment and backups
 

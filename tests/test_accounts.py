@@ -91,7 +91,7 @@ def test_default_migration_preserves_overrides_and_entered_rows(db):
 def test_account_request_requires_confirmation_target_and_valid_name(auth, device):
     assert request_account(auth, confirmed=False).status_code == 422
     assert request_account(auth, "2026 bELL st.").status_code == 409
-    for name in (" ", "Bad\nAccount", "[Transfer]", "Not QIF 😀"):
+    for name in (" ", "Bad\nAccount", "[Transfer]", "Not QIF 😀", "x" * 40):
         assert request_account(auth, name).status_code == 422
     request_id = str(uuid4())
     response = request_account(auth, " New Account ", request_id=request_id)
@@ -102,7 +102,8 @@ def test_account_request_requires_confirmation_target_and_valid_name(auth, devic
     assert "support" in request["message"]
     assert request_account(auth, "New Account", request_id=request_id).json()["id"] == request_id
     assert request_account(auth, "new account").json()["id"] == request_id
-    assert request_account(auth, "New Account", account_type="Cash").status_code == 409
+    for kind in ("Cash", "CCard", "Bill"):
+        assert request_account(auth, "New Account", account_type=kind).status_code == 422
     assert request_account(auth, "Different", request_id=request_id).status_code == 409
     assert auth.post("/api/account-requests", headers=device, json={}).status_code == 403
     ref = auth.get("/api/catalog").json()
@@ -242,6 +243,12 @@ def test_register_searchable_choices_and_confirmed_account_creation(browser_url,
         expect(options.get_by_role("option", name="R&K Properties 2026", exact=True)).to_have_count(0)
         options.get_by_role("option", name="2026 Bell St.", exact=True).click()
         expect(cell(row, "account")).to_contain_text("2026 Bell St.")
+        edit(row, "account", "x" * 40)
+        page.keyboard.press("Enter")
+        too_long = page.get_by_role("dialog", name="Create Quicken account")
+        expect(too_long.get_by_role("alert")).to_contain_text("39 characters")
+        expect(too_long.get_by_role("button", name="Confirm account creation")).to_be_disabled()
+        too_long.get_by_role("button", name="Close account creation").click()
         edit(row, "date", "2024-01-01")
         page.keyboard.press("Enter")
         expect(cell(row, "account")).to_contain_text("2026 Bell St.")
@@ -249,6 +256,8 @@ def test_register_searchable_choices_and_confirmed_account_creation(browser_url,
         page.keyboard.press("Enter")
         dialog = page.get_by_role("dialog", name="Create Quicken account")
         expect(dialog).to_be_visible()
+        expect(dialog.get_by_role("combobox")).to_have_count(0)
+        expect(dialog).to_contain_text("Bank account")
         assert auth.get("/api/catalog").json()["account_requests"] == []
         dialog.get_by_role("button", name="Close account creation", exact=True).click()
         expect(dialog).to_have_count(0)
@@ -258,9 +267,34 @@ def test_register_searchable_choices_and_confirmed_account_creation(browser_url,
         dialog.get_by_role("button", name="Confirm account creation", exact=True).click()
         expect(dialog).to_have_count(0)
         expect(cell(row, "account")).to_contain_text("Waiting for a Windows client")
+        assert auth.get("/api/catalog").json()["account_requests"][0]["account_type"] == "Bank"
         expect(row.locator(".register-status")).to_contain_text("pending Windows verification")
         page.reload()
         expect(cell(row, "account")).to_contain_text("2028 New Rental")
         expect(cell(row, "account")).to_contain_text("Waiting for a Windows client")
+        request = auth.get("/api/catalog").json()["account_requests"][0]
+        auth.post(
+            "/api/device/heartbeat",
+            headers=device,
+            json={
+                "protocol": 1,
+                "file_identity": FILE,
+                "account_creation": 1,
+            },
+        )
+        owner = str(uuid4())
+        base = f"/api/device/account-requests/{request['id']}"
+        proof = fresh(auth, device)
+        auth.post(
+            base + "/claim", headers=device, json={"owner": owner, "event_id": proof}
+        ).raise_for_status()
+        auth.post(base + "/attempt", headers=device, json={"owner": owner}).raise_for_status()
+        proof = fresh(auth, device, QIF + "!Account\nN2028 New Rental\nTBank\n^\n")
+        auth.post(
+            base + "/complete", headers=device, json={"owner": owner, "event_id": proof}
+        ).raise_for_status()
+        expect(cell(row, "account")).not_to_contain_text("Waiting", timeout=10000)
+        expect(row.locator(".register-status")).not_to_contain_text("pending Windows verification")
+        assert auth.get("/api/transactions").json()[0]["status"] == "review"
         page.screenshot(path=".local/account-creation-register.png", full_page=True)
         browser.close()

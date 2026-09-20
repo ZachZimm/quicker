@@ -1,6 +1,29 @@
-# Windows client status — September 17, 2026
+# Windows client status — September 20, 2026
 
 Starting revision: `870746d`. Implementation is maintained on `main`.
+
+## Bank account creation update
+
+Bank-only creation is implemented in the browser, API and Windows companion.
+The browser confirms the account name without a type selector. Native tests on
+the disconnected QDF verified creation without opening-balance transactions or
+online services, exact account-name/type export proof, repeat-request handling,
+and a separately approved transaction entered into the new account. Names are
+limited to the observed 39-character Quicken import limit. See
+[WINDOWS_ACCOUNT_CREATION.md](WINDOWS_ACCOUNT_CREATION.md) for the full contract.
+
+The full test run passed 192 tests. After the final name-limit and polling checks,
+all 35 account API/controller/browser tests passed, including three added tests.
+TypeScript compilation, production bundling, changed Python lint and whitespace
+checks passed. The Windows package was rebuilt and restarted with existing
+pairing/configuration/journals. The original QDF is open again. The packaged client
+completed a fresh production export against `100.77.107.36:8999`, advancing the
+reference to generation 7. All account/transaction mutations used the disconnected
+test copy and isolated local server databases.
+
+Linux still needs to pull this update on `main`, rebuild `web`, and restart the
+server and worker to deploy the Bank-only frontend and API validation. The Windows
+client already uses the existing account-request protocol on the deployed server.
 
 ## Verified on Windows
 

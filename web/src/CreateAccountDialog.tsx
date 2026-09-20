@@ -11,10 +11,13 @@ export function CreateAccountDialog({
   onCancel: () => void;
   onCreated: (request: AccountRequest) => void;
 }) {
-  const [kind, setKind] = useState("Bank");
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
   const [id] = useState(requestId);
+  const nameError =
+    name.length > 39
+      ? "Shorten the account name to 39 characters, then try again."
+      : "";
   return (
     <div className="modal-overlay">
       <section
@@ -26,24 +29,12 @@ export function CreateAccountDialog({
         <h2>Create an account in Quicken?</h2>
         <p>“{name}” is not in the existing account list.</p>
         <p>
-          Confirm to request this account in the Windows companion's configured
+          Confirm to create a Bank account in the Windows companion's configured
           Quicken file. The account remains pending until Windows creates it and
           a fresh export verifies it. Transactions still need separate approval
           and entry.
         </p>
-        <label>
-          Account type
-          <select
-            value={kind}
-            disabled={working}
-            onChange={(event) => setKind(event.target.value)}
-          >
-            <option value="Bank">Bank</option>
-            <option value="Cash">Cash</option>
-            <option value="CCard">Credit card</option>
-          </select>
-        </label>
-        {error && <p role="alert">{error}</p>}
+        {(nameError || error) && <p role="alert">{nameError || error}</p>}
         <div className="actions">
           <button
             aria-label="Close account creation"
@@ -54,7 +45,7 @@ export function CreateAccountDialog({
           </button>
           <button
             className="primary"
-            disabled={working}
+            disabled={working || !!nameError}
             onClick={async () => {
               setWorking(true);
               setError("");
@@ -64,7 +55,7 @@ export function CreateAccountDialog({
                   {
                     request_id: id,
                     name,
-                    account_type: kind,
+                    account_type: "Bank",
                     confirmed: true,
                   },
                 );

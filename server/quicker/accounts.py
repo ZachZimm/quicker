@@ -7,6 +7,7 @@ from uuid import UUID
 
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
+from quicker_client.qif import MAX_ACCOUNT_NAME
 from sqlalchemy import select
 
 from .catalog import catalog
@@ -16,15 +17,15 @@ from .desktop import capability, generation
 
 class NewAccount(BaseModel):
     request_id: UUID
-    name: str = Field(min_length=1, max_length=63)
-    account_type: Literal["Bank", "Cash", "CCard"] = "Bank"
+    name: str = Field(min_length=1, max_length=MAX_ACCOUNT_NAME)
+    account_type: Literal["Bank"] = "Bank"
     confirmed: Literal[True]
 
     @field_validator("name")
     @classmethod
     def valid_name(cls, name):
         name = name.strip()
-        if not name or any(ord(c) < 32 or c in "[]^" for c in name):
+        if not name or any(ord(c) < 32 or ord(c) == 127 or c in "[]^" for c in name):
             raise ValueError("Use a single-line account name without brackets or ^")
         try:
             name.encode("cp1252")
@@ -155,6 +156,10 @@ def install(app, db, authenticated, require_device):
             raise HTTPException(409, "Update Windows to support account creation")
         if cap.get("file_identity") != request.file_identity:
             raise HTTPException(409, "This account request belongs to a different Quicken file")
+        if request.account_type != "Bank":
+            raise HTTPException(
+                409, "Only Bank account creation is supported; resolve this older request manually"
+            )
         if request.payload.get("owner") not in (None, str(owner)):
             raise HTTPException(409, "Another companion instance owns this account request")
         return request

@@ -78,6 +78,7 @@ class Companion:
         self.operations = None
         self.protocol = 0
         self.last_refresh = 0
+        self.account_retries = {}
         self.last_desktop_message = None
         if data_file:
             from .desktop import WindowsQuicken
@@ -102,7 +103,12 @@ class Companion:
         body = {}
         if self.operations:
             adapter = self.operations.adapter
-            body = {"protocol": 1, "file_identity": adapter.identity, "file_name": adapter.path.name}
+            body = {
+                "protocol": 1,
+                "file_identity": adapter.identity,
+                "file_name": adapter.path.name,
+                "account_creation": 1,
+            }
             try:
                 adapter.ready()
                 body.update(ready=True, message="Quicken ready")
@@ -119,6 +125,21 @@ class Companion:
         if not self.operations or self.protocol != 1:
             return
         ops = self.operations
+        pending = self.request("GET", "/api/device/operations")
+        for run in pending:
+            if self.stop.is_set():
+                return
+            ops.process(run)
+            self.last_refresh = time.time()
+        accounts = self.request("GET", "/api/device/account-requests")
+        # Recover an in-flight creation before claiming any later request.
+        accounts.sort(key=lambda item: (item["status"] != "creating", item["created"]))
+        if accounts and not self.stop.is_set():
+            account = accounts[0]
+            if time.time() >= self.account_retries.get(account["id"], 0):
+                self.account_retries[account["id"]] = time.time() + 60
+                ops.process_account(account)
+                self.last_refresh = time.time()
         while not self.commands.empty():
             kind, request_id = self.commands.get_nowait()
             try:
@@ -127,7 +148,7 @@ class Companion:
                 self.commands.put((kind, request_id))
                 raise
         pending = self.request("GET", "/api/device/operations")
-        if not pending and time.time() - self.last_refresh > 900:
+        if not pending and not accounts and time.time() - self.last_refresh > 900:
             # Never steal focus on connect, on a timer, or while Quicken is in use.
             ops.adapter.ready(background=True)
             pending = [ops.start("refresh", background=True)]

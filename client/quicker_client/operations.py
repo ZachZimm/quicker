@@ -94,6 +94,69 @@ class Operations:
             raise RuntimeError(receipt.get("message") or "Export requires review before entry")
         return receipt
 
+    def account_refresh(self):
+        """Finish a full native refresh before using its event as account proof."""
+        if self.client.stop.is_set():
+            raise DesktopUnavailable("Disconnected before account verification")
+        run = self.start("refresh")
+        if run["kind"] != "refresh":
+            raise DesktopUnavailable("Finish the active transaction operation before creating an account")
+        result = self.process(run)
+        if not result or result["status"] != "complete":
+            raise DesktopUnavailable("Account creation requires a completed fresh Quicken export")
+        return result["latest_event"]
+
+    def process_account(self, request):
+        from .qif import render_account
+
+        if request["file_identity"] != self.adapter.identity:
+            raise DesktopUnavailable("This account request requires a different configured Quicken file")
+        render_account(request)  # Reject unsupported types/names before any desktop action.
+        key = "account:" + request["id"]
+        identity = {k: request[k] for k in ("id", "file_identity", "name", "account_type")}
+        identity["owner"] = self.owner
+        saved = self.get(key)
+        if saved and any(saved.get(k) != v for k, v in identity.items()):
+            raise DesktopUnavailable("Account request differs from its durable journal; resolve it manually")
+        saved = saved or {**identity, "phase": "queued"}
+        self.put(key, saved)
+        self.adapter.ready()
+        base = "/api/device/account-requests/" + request["id"]
+        self.client.report("Verifying account request: " + request["name"])
+        event_id = self.account_refresh()
+        claimed = self.call(base + "/claim", event_id=event_id)
+        if claimed["status"] == "complete":
+            self.put(key, {**identity, "phase": "complete"})
+            self.client.report("Account verified in Quicken: " + request["name"])
+            return claimed
+        if claimed.get("attempted") or saved["phase"] in ("attempting", "submitted", "complete"):
+            # Lost attempt responses and crashes are indistinguishable from successful
+            # submission. Only a new export may resolve them; never replay the UI action.
+            result = self.call(base + "/complete", event_id=event_id)
+        else:
+            with self.adapter.session():
+                if self.client.stop.is_set():
+                    raise DesktopUnavailable("Disconnected before account creation")
+
+                def before_submit():
+                    if self.client.stop.is_set():
+                        raise DesktopUnavailable("Disconnected before account submission")
+                    self.put(key, {**identity, "phase": "attempting", "started": time()})
+                    permission = self.call(base + "/attempt")
+                    if permission.get("may_create") is not True or self.client.stop.is_set():
+                        raise DesktopUnavailable(
+                            "Account attempt is uncertain; refresh to verify, never resubmit"
+                        )
+
+                self.adapter.create_account(request, self.directory / "accounts", before_submit)
+                self.put(key, {**identity, "phase": "submitted"})
+            # Export sessions are not nested inside the import session.
+            event_id = self.account_refresh()
+            result = self.call(base + "/complete", event_id=event_id)
+        self.put(key, {**identity, "phase": "complete"})
+        self.client.report("Account verified in Quicken: " + request["name"])
+        return result
+
     def process(self, run):
         if run["file_identity"] != self.adapter.identity:
             raise DesktopUnavailable("This run requires a different configured Quicken file")

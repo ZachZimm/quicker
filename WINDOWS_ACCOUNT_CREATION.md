@@ -1,19 +1,21 @@
-# Windows handoff: create confirmed Quicken accounts
+# Windows account creation: implementation and contract
 
 The Linux/browser work adds latest-year account defaults, searchable register
 dropdowns, and explicit confirmation for an account absent from the imported QIF.
-The Windows account-creation adapter is still needed. Existing transaction entry
-must continue to require an account verified in Quicken's exported account list.
-Do not advertise this capability until it is implemented and tested on Windows.
+The Windows account-creation adapter is implemented and validated on English
+Quicken Classic Business & Personal 27.1.69.29. Per the user's revised scope,
+creation supports **Bank only**. Existing transaction entry continues to require
+an account verified in Quicken's exported account list.
 
 ## User flow and scope
 
-In Review, the user types an account name, chooses Create or presses Enter, selects
-Bank, Cash, or Credit card, and confirms. `POST /api/account-requests` stores a
+In Review, the user types an account name, chooses Create or presses Enter, and
+confirms. There is no account-type prompt; the browser sends Bank and the API
+rejects other types. `POST /api/account-requests` stores a
 durable request tied to the paired device and its configured QDF identity. The
 transaction uses that exact name as an override and stays in review until a fresh
 export contains the account. The browser distinguishes pending creation from an
-existing account. It currently says that an updated Windows client is required.
+existing account. Older companions leave requests queued with an update message.
 
 Only create the named local/manual account, with no institution connection or
 invented opening balance, opening-balance transaction, or historical entries.
@@ -49,7 +51,7 @@ durable owner UUID as the existing desktop journal. These operations are separat
 from `/api/device/operations` and its `DesktopRun` records.
 
 1. Poll `GET /api/device/account-requests`. Each item has `id`, `name`,
-   `account_type` (`Bank`, `Cash`, `CCard`), `file_identity`, `file_name`, `status`,
+   `account_type` (`Bank`), `file_identity`, `file_name`, `status`,
    `created`, `attempted`, and a user-facing `message`. Only the owning device's
    unfinished requests are returned. Check the QDF identity before any action.
 2. For a queued request, create, upload and reconcile a **new native full export**
@@ -78,9 +80,12 @@ from `/api/device/operations` and its `DesktopRun` records.
 An export must have been received within ten minutes and its generation must be
 the current reference generation. Manual one-time QIF uploads are not creation
 proof. Existing export validation and reduced-coverage checks remain in force.
-Account names are trimmed, limited to 63 characters, cp1252-compatible, and exclude
+Account names are trimmed, limited to 39 characters, cp1252-compatible, and exclude
 control characters, brackets, and `^`. Identical names are deduplicated ignoring
 case within the target QDF; request IDs cannot be reused for different content.
+The original 63-character limit was corrected after native testing showed that
+Quicken truncates QIF account names to 39 characters. Both API and client reject
+longer names before mutation; the browser asks the user to shorten the name.
 
 ## Recovery
 
@@ -105,7 +110,7 @@ nesting. Prefer reusing the existing export implementation over a second exporte
 
 Use the existing disconnected test QDF, never the production file for probes.
 
-- Create Bank, Cash and Credit card accounts with exact names and expected types;
+- Create Bank accounts with exact names and expected types;
   verify no unwanted opening-balance transactions or online connections.
 - Verify a pre-existing account satisfies a queued request without being created
   again, and differently cased/type-conflicting names stop without mutation.
@@ -118,3 +123,30 @@ Use the existing disconnected test QDF, never the production file for probes.
   transaction export/reconciliation flow.
 - Build and install the companion preserving pairing and the local journal;
   document which Quicken version and account types were tested.
+
+## Implementation and native results (September 20, 2026)
+
+- The companion advertises `account_creation: 1`, polls requests, prioritizes
+  in-flight creations and spaces retries by at least 60 seconds. Refresh, import
+  and entry use the existing desktop mutex and QDF/focus/input guards.
+- Creation imports a QIF containing only `!Account`, the exact name and `TBank`.
+  Only Account List is checked in Quicken's QIF Import dialog. No transaction,
+  opening balance, category, memorized payee or online-service data is supplied.
+- Created `2029 Bell St.` in the disconnected test QDF. A fresh full export proved
+  exactly one Bank account was added and all transaction history was unchanged.
+  Quicken's Account Details confirmed Checking, no institution or account number,
+  no transaction-download setup and no online bill pay. Repeated processing did
+  not create another account. A separately approved one-cent test expense was
+  subsequently entered and verified through the normal transaction protocol.
+- A 39-character name including an accented character, semicolon and ampersand
+  round-tripped exactly, again with unchanged transaction history. An earlier
+  overlong probe remains only in the disconnected test copy as evidence of
+  Quicken's truncation; it was not renamed or deleted.
+- Fixed QIF account selection when a register is open: explicitly open the custom
+  dropdown before selecting All accounts, preserving dropdown focus and avoiding
+  an Enter key that could submit the dialog prematurely.
+- Controller/API tests cover offline queueing, old-client capability, unsupported
+  types/names, existing accounts, case/type conflicts, ownership, QDF mismatch,
+  revoked devices, unexpected dialogs, active entry, reduced export coverage,
+  lost responses and crashes before/after submission. Browser validation covers
+  confirmation without a type selector and clearing pending status after proof.

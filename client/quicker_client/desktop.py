@@ -148,6 +148,19 @@ class WindowsQuicken:
         if bool(c.get_check_state()) != desired:
             raise DesktopUnavailable("Quicken did not accept an export/import option")
 
+    def _all_accounts(self, dialog):
+        account = self._control(dialog, 2302, "QWComboBox")
+        if account.window_text() != "<All accounts>":
+            self._check()
+            # QWComboBox ignores Home unless its list is open. Enter on the
+            # closed control can submit the entire dialog with the old account.
+            rect = account.rectangle()
+            account.click_input(coords=(rect.width() - 10, rect.height() // 2))
+            self._check()
+            account.type_keys("{HOME}{ESC}", pause=0.15, set_foreground=False)
+        if account.window_text() != "<All accounts>" or not dialog.is_visible():
+            raise DesktopUnavailable("Cannot select all accounts for QIF routing")
+
     @contextmanager
     def session(self, background=False):
         import win32api
@@ -178,13 +191,7 @@ class WindowsQuicken:
         self.main.type_keys("%feq", pause=0.15)
         dialog = self._dialog("QIF Export")
         self._text(dialog, 100, target)
-        account = self._control(dialog, 2302, "QWComboBox")
-        if account.window_text() != "<All accounts>":
-            # This custom control supports Home to select the first/all row.
-            account.set_focus()
-            account.type_keys("{HOME}{ENTER}")
-        if account.window_text() != "<All accounts>":
-            raise DesktopUnavailable("Cannot select all accounts for export")
+        self._all_accounts(dialog)
         self._text(dialog, 110, "1/1/1901")
         self._text(dialog, 111, "12/31/2099")
         for cid in (102, 103, 104, 105):
@@ -220,7 +227,18 @@ class WindowsQuicken:
         from .qif import render_entry
 
         content = render_entry(item)
-        target = Path(directory).resolve() / (item["id"] + ".qif")
+        self._import(content, item["id"], directory, before_submit, account_only=False)
+
+    def create_account(self, request, directory, before_submit):
+        from .qif import render_account
+
+        self._import(render_account(request), request["id"], directory, before_submit, account_only=True)
+
+    def _import(self, content, request_id, directory, before_submit, account_only):
+        from uuid import uuid4
+
+        # Preparation can be retried before an attempt; every preparation gets a new file.
+        target = Path(directory).resolve() / (request_id + "-" + str(uuid4()) + ".qif")
         target.parent.mkdir(parents=True, exist_ok=True)
         with target.open("xb") as f:
             f.write(content)
@@ -230,14 +248,10 @@ class WindowsQuicken:
         self.main.type_keys("%fiq", pause=0.15)
         dialog = self._dialog("QIF Import")
         self._text(dialog, 100, target)
-        account = self._control(dialog, 2302, "QWComboBox")
-        if account.window_text() != "<All accounts>":
-            account.set_focus()
-            account.type_keys("{HOME}{ENTER}")
-        if account.window_text() != "<All accounts>":
-            raise DesktopUnavailable("Cannot select QIF account-header routing")
-        self._checked(dialog, 102, True)
-        for cid in (103, 104, 105, 113, 114, 2304):
+        self._all_accounts(dialog)
+        self._checked(dialog, 102, not account_only)
+        self._checked(dialog, 104, account_only)
+        for cid in (103, 105, 113, 114, 2304):
             self._checked(dialog, cid, False)
         self._check()
         before_submit()

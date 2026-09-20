@@ -4,6 +4,8 @@ import base64
 from datetime import date
 from uuid import UUID
 
+MAX_ACCOUNT_NAME = 39  # Quicken 27.1.69.29 truncates longer QIF account-list names.
+
 
 def decode_qif(content):
     try:
@@ -18,6 +20,22 @@ def marker(item_id):
 
 def delivery_memo(item):
     return (item["data"].get("memo", "").strip() + " " + marker(item["id"])).strip()
+
+
+def render_account(request):
+    """An account-list record only: no balance, transactions or online services."""
+    name = request["name"]
+    if request["account_type"] != "Bank":
+        raise ValueError("Only Bank account creation is supported")
+    if (
+        not isinstance(name, str)
+        or not name
+        or name != name.strip()
+        or len(name) > MAX_ACCOUNT_NAME
+        or any(ord(c) < 32 or ord(c) == 127 or c in "[]^" for c in name)
+    ):
+        raise ValueError("Use an account name of 1–39 characters without brackets or control characters")
+    return ("!Account\r\nN" + name + "\r\nTBank\r\n^\r\n").encode("cp1252", errors="strict")
 
 
 def render_entry(item):
