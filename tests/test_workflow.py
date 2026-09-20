@@ -134,7 +134,7 @@ def test_review_required_date_override_and_stale_edit(auth, db, photo):
     response = action(auth, row, "save", edit)
     assert response.status_code == 200, response.text
     saved = response.json()[0]
-    assert saved["data"]["account"] == "2026 Bell St."
+    assert saved["data"]["account"] == "2027 Bell St."
     assert action(auth, row, "save", edit).status_code == 409
     approved = action(auth, saved, "approve").json()[0]
     assert approved["status"] == "approved"

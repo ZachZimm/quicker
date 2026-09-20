@@ -2,6 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { api, fieldsOnly, post } from "./api";
 import type { Catalog, Fields, Transaction } from "./api";
 
+export const automaticAccount = (catalog: Catalog, property: string | null) =>
+  catalog.routes
+    .filter((r) => r.property === property)
+    .sort((a, b) => b.year - a.year)[0]?.account || null;
+
 export const editable = (row: Transaction) =>
   ["review", "approved"].includes(row.status);
 
@@ -35,12 +40,7 @@ export function changeField(
     ["property", "date", "account_override"].includes(key) &&
     !data.account_override
   )
-    data.account =
-      catalog.routes.find(
-        (r) =>
-          r.property === data.property &&
-          r.year === Number(data.date?.slice(0, 4)),
-      )?.account || null;
+    data.account = automaticAccount(catalog, data.property);
   return { ...row, data };
 }
 

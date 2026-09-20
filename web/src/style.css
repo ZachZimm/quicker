@@ -1290,6 +1290,26 @@ progress {
 .cell-error input {
   border-color: #b53e28;
 }
+.search-picker-list {
+  position: fixed;
+  z-index: 120;
+  overflow: auto;
+  background: var(--surface, #fff);
+  color: var(--text, #182d45);
+  border: 1px solid var(--line, #a6bbd5);
+  border-radius: 5px;
+  box-shadow: 0 5px 18px #0003;
+  font-size: 0.8125rem;
+}
+.search-picker-list [role="option"], .search-picker-list p {
+  padding: 8px 12px;
+  cursor: pointer;
+}
+.search-picker-list [role="option"]:hover,
+.search-picker-list [aria-selected="true"] {
+  background: #edf5ff;
+  color: #182d45;
+}
 .register-status {
   min-width: 160px;
   max-width: 230px;

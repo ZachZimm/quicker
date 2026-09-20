@@ -72,7 +72,8 @@ sign-in. Restart the server after installing this change.
    records are retained. Importing never writes to Quicken.
 2. Review the property directory and year/account mappings. Known aliases share
    a property identity; units remain separate labels. Exact Quicken account names
-   are retained. R&K business defaults use payment year; auto insurance uses the
+   are retained. Automatic assignments use the property's latest mapped year,
+   including when the payment date is missing; auto insurance uses the
    exact `R&K Properties` account. All assignments remain editable.
 3. Choose **Upload & analyze** for JPEG, PNG, or HEIC images. Analysis starts
    automatically and detects the document type. Choose whether files are separate documents
@@ -197,9 +198,31 @@ addresses, and tax stubs do not trigger this rule.
 `1008 Bell St, Reno, NV` is verified as **Bell St.** The original address is shown
 in review. Further verified addresses can be added to the same property directory.
 Explicit business rules take precedence and conflicting evidence is flagged.
-Assignments remain editable. The payment date is still required before the
-payment-year destination account can be selected; billing and due dates are not
-substituted.
+Assignments remain editable. The destination account defaults to the property's
+highest mapped year, independently of the transaction date. A payment date is
+still required for approval; billing and due dates are not substituted.
+
+## Choosing and requesting accounts
+
+Click an Account cell to open the existing options, then type to narrow the list
+without regard to capitalization. Property, unit, category, and expense-tag cells
+use the same searchable dropdown. Selecting an account manually is an override;
+choose **Use automatic account** to return to the property's latest mapped year.
+Date changes do not select an older account. Review older-year expenses explicitly
+if they should go to an older register.
+
+For a name absent from the account list, choose **Create … in Quicken** or press
+Enter and confirm the exact name and account type. Windows must be paired and
+configured for a Quicken file. Requests can wait while Windows is offline. The
+browser saves the requested account on the transaction but labels it pending;
+approval requires the account to appear in an imported Quicken account list.
+The request itself completes only after a fresh Windows export verifies creation.
+Requests do not insert invented accounts into the reference catalog.
+
+The Windows creation adapter still needs implementation. Current clients leave
+these requests queued with an explicit message. The API contract, recovery rules,
+and Windows testing steps are in [WINDOWS_ACCOUNT_CREATION.md](WINDOWS_ACCOUNT_CREATION.md).
+The existing transaction-entry protocol continues to handle verified accounts.
 
 ## Rental units and shared expenses
 
@@ -207,7 +230,7 @@ Bell Street has one annual register for both rentals. Select `1008 Bell` or
 `2 Bell` in the register's Unit column or the detail form for a unit-specific expense, or
 `Whole property` for a shared expense. `Unresolved` means the available evidence
 does not identify a rental; it remains visible in the table and does not prevent
-approval. The unit never changes the payment-year account or divides the amount.
+approval. The unit never changes the property account or divides the amount.
 
 Unit selection supplies the exact existing Quicken unit tag. The separate expense
 tag, such as `Utilities`, is retained. Review displays both intended Quicken tags;
@@ -279,18 +302,18 @@ for matching, including card descriptors and the existing City Of/City 0f varian
 | Recognized expense | Preferred category | Assignment |
 | --- | --- | --- |
 | Auto insurance | Insurance (Business):Truck | R&K Properties; exact R&K Properties account |
-| iCloud renewal | ICloud | R&K Properties; payment-year account |
-| HP All-In Plan | All In Plan | R&K Properties; payment-year account |
-| HP Instant Ink | Printer Plan | R&K Properties; payment-year account |
-| Sam's Club fuel | Truck Gas | R&K Properties; payment-year account |
-| The Wash Shop / Wash Shop | Truck Wash | R&K Properties; payment-year account |
-| USPS PO box renewal | P.O. Box-6 Months | R&K Properties; payment-year account |
-| USPS postage | Postage and Delivery (Business) | R&K Properties; payment-year account |
-| Explicit Spectrum Mobile/cell service | Cell Phones | R&K Properties; payment-year account |
+| iCloud renewal | ICloud | R&K Properties; latest mapped account |
+| HP All-In Plan | All In Plan | R&K Properties; latest mapped account |
+| HP Instant Ink | Printer Plan | R&K Properties; latest mapped account |
+| Sam's Club fuel | Truck Gas | R&K Properties; latest mapped account |
+| The Wash Shop / Wash Shop | Truck Wash | R&K Properties; latest mapped account |
+| USPS PO box renewal | P.O. Box-6 Months | R&K Properties; latest mapped account |
+| USPS postage | Postage and Delivery (Business) | R&K Properties; latest mapped account |
+| Explicit Spectrum Mobile/cell service | Cell Phones | R&K Properties; latest mapped account |
 | TMWA | Water | Property remains for review |
 | City of Reno / City of Sparks sewer | Sewer | Property remains for review |
 | Waste Management | Garbage | Property remains for review |
-| Paid Washoe County tax stub | Property Tax | Verified parcel mapping; payment-year account |
+| Paid Washoe County tax stub | Property Tax | Verified parcel mapping; latest mapped account |
 
 Eight Washoe parcel mappings in `server/quicker/profile.py` were verified from
 the property-location fields of the 2026 tax notices, `IMG_3320.HEIC` through

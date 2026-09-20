@@ -67,7 +67,7 @@ def test_utility_type_detected_after_upload_and_location_totals_stay_separate(au
         assert r["data"]["billing_customer_id"] == "6-37085-65004"
         assert r["data"]["invoice_date"] == "2026-04-03"
         assert r["data"]["invoice_number"] == "fixture-invoice"
-        assert r["data"]["date"] is None and r["data"]["account"] is None
+        assert r["data"]["date"] is None and r["data"]["account"] == "2027 Bell St."
         assert r["data"]["category"] == "Garbage"
     assert len(auth.get("/api/documents").json()[0]["ignored"]) == 3
 

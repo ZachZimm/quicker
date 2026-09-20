@@ -850,6 +850,18 @@ function Review({
                       {catalog.accounts.map((a) => (
                         <option key={a.name}>{a.name}</option>
                       ))}
+                      {(catalog.account_requests || [])
+                        .filter(
+                          (a) =>
+                            !catalog.accounts.some(
+                              (existing) => existing.name === a.name,
+                            ),
+                        )
+                        .map((a) => (
+                          <option key={a.id} value={a.name}>
+                            {a.name} · Pending creation
+                          </option>
+                        ))}
                     </select>
                   </label>
                   <label className="checkbox-label">
@@ -861,7 +873,7 @@ function Review({
                         update("account_override", checked);
                       }}
                     />
-                    Override the account selected by payment year
+                    Override the latest year's account for this property
                   </label>
                   <label>
                     Category

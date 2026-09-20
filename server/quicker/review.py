@@ -1,7 +1,6 @@
 import hashlib
 import json
 from collections import Counter
-from datetime import date
 from decimal import Decimal, InvalidOperation
 from time import time
 from uuid import uuid4
@@ -10,7 +9,7 @@ from sqlalchemy import select
 
 from .catalog import catalog
 from .contracts import Extraction, ReviewFields
-from .db import Audit, Candidate, Route
+from .db import AccountRequest, Audit, Candidate, Route
 from .matching import historical_matches, match_key, scope_compatible
 from .profile import canonical_property, merchant_identity, property_from_address, washoe_property_from_parcel
 from .rules import initial_assignments
@@ -43,8 +42,10 @@ def resolve_account(session, data):
     result["property"] = canonical_property(result.get("property"))
     if not result.get("account_override"):
         route = None
-        if result.get("property") and result.get("date"):
-            route = session.get(Route, (result["property"], date.fromisoformat(result["date"]).year))
+        if result.get("property"):
+            route = session.scalar(
+                select(Route).where(Route.property == result["property"]).order_by(Route.year.desc()).limit(1)
+            )
         result["account"] = route.account if route else None
     return result
 
@@ -240,16 +241,19 @@ def reconcile_reference(session, previous, current):
             continue
         changed_matches = new_matches and new_matches != old_matches
         renamed = canonical_property(candidate.data.get("property")) != candidate.data.get("property")
-        if not renamed and not changed_matches:
+        resolved = resolve_account(session, candidate.data)
+        rerouted = resolved.get("account") != candidate.data.get("account")
+        if not renamed and not changed_matches and not rerouted:
             continue
-        candidate.data = resolve_account(session, candidate.data) if renamed else dict(candidate.data)
-        if changed_matches:
+        candidate.data = resolved
+        if changed_matches or rerouted:
             candidate.data = {**candidate.data, "duplicate_acknowledged": False}
         if candidate.status != "removed":
             candidate.status = "review"
         candidate.revision += 1
         audit(
-            session, candidate, "reference_matches_changed" if changed_matches else "property_alias_migrated"
+            session, candidate, "reference_matches_changed" if changed_matches else
+            "account_route_changed" if rerouted else "property_alias_migrated"
         )
 
 
@@ -302,7 +306,11 @@ def issues(session, candidate):
         result.append("Only USD is supported")
     for key, target in (("category", "categories"), ("account", "accounts"), ("tag", "tags")):
         if d.get(key) and d[key] not in {r["name"] for r in ref[target]}:
-            result.append(f"Choose an existing {key} from the QIF catalog")
+            pending = key == "account" and session.scalar(select(AccountRequest.id).where(
+                AccountRequest.name == d[key], AccountRequest.status != "complete"
+            ))
+            result.append("Account creation is pending Windows verification" if pending else
+                          f"Choose an existing {key} from the QIF catalog")
     if d.get("document_type") == "credit_card" and not d.get("property"):
         result.append("Assign the card transaction to a property or business")
     if d.get("property") and not session.scalar(select(Route).where(Route.property == d["property"])):

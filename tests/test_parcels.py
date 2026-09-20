@@ -25,7 +25,7 @@ def test_unknown_or_incomplete_parcel_is_not_guessed(parcel):
         ("Washoe County Treasurer", False, None),
     ],
 )
-def test_paid_tax_mapping_and_payment_year_account(db, photo, payee, paid, expected):
+def test_paid_tax_mapping_and_latest_account(db, photo, payee, paid, expected):
     doc_id = ingest(db, [("stub.png", photo)], "parcel-test")[0]
     extraction = Extraction.model_validate(
         {
@@ -50,7 +50,7 @@ def test_paid_tax_mapping_and_payment_year_account(db, photo, payee, paid, expec
             assert row is None and len(ignored) == 1
         else:
             assert row.data["property"] == expected
-            assert row.data["account"] == ("2026 Bell St." if expected else None)
+            assert row.data["account"] == ("2027 Bell St." if expected else None)
             assert row.status == "review"
             assert row.data["unit"] == ("whole_property" if expected else "unresolved")
             assert row.data["amount_minor"] == -40311

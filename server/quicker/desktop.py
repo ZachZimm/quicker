@@ -79,6 +79,10 @@ def install(app, db, authenticated, require_device):
         if body is None:
             raise HTTPException(501, "Update the companion to request an entry run")
         with db.write() as session:
+            from .accounts import creation_in_progress
+
+            if body.kind == "entry" and creation_in_progress(session):
+                raise HTTPException(409, "Verify the account creation in progress before entering transactions")
             old = session.get(DesktopRun, str(body.request_id))
             if old:
                 if auth.get("device_id") and old.device_id != auth["device_id"]:

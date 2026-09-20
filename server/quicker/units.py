@@ -1,4 +1,4 @@
-"""Rental assignment and Quicken tags, independent of payment-year account routing."""
+"""Rental assignment and Quicken tags, independent of property account routing."""
 
 import re
 

@@ -68,10 +68,10 @@ def test_address_assignment_keeps_payment_date_required_and_review_editable(auth
     assert row["data"]["property_assignment"] == "document_address"
     assert row["data"]["property_address"]["street"] == "1008 BELL ST"
     assert row["data"]["tag"] is None
-    assert row["data"]["date"] is None and row["data"]["account"] is None
+    assert row["data"]["date"] is None and row["data"]["account"] == "2027 Bell St."
     assert action(auth, row, "approve").status_code == 422
     saved = action(auth, row, "save", {**fields(row), "date": "2026-08-10"}).json()[0]
-    assert saved["data"]["account"] == "2026 Bell St."
+    assert saved["data"]["account"] == "2027 Bell St."
     changed = action(auth, saved, "save", {**fields(saved), "property": "R&K Properties"}).json()[0]
     assert changed["data"]["property"] == "R&K Properties"
     assert changed["data"]["account"] == "R&K Properties 2026"

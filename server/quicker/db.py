@@ -167,6 +167,18 @@ class ExportEvent(Base):
     payload: Mapped[dict] = mapped_column(JSON)
 
 
+class AccountRequest(Base):
+    __tablename__ = "account_requests"
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    device_id: Mapped[str] = mapped_column(ForeignKey("devices.id"), index=True)
+    file_identity: Mapped[str] = mapped_column(String)
+    name: Mapped[str] = mapped_column(String)
+    account_type: Mapped[str] = mapped_column(String)
+    status: Mapped[str] = mapped_column(String)
+    created: Mapped[int] = mapped_column(Integer)
+    payload: Mapped[dict] = mapped_column(JSON)
+
+
 class Database:
     def __init__(self, directory: str | Path | None = None):
         self.directory = Path(directory or os.environ.get("QUICKER_DATA_DIR", "data")).resolve()

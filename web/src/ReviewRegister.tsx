@@ -1,7 +1,15 @@
 import { useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { FileText, RotateCcw, Trash2 } from "lucide-react";
-import type { Catalog, DocumentRecord, Fields, Transaction } from "./api";
+import type {
+  AccountRequest,
+  Catalog,
+  DocumentRecord,
+  Fields,
+  Transaction,
+} from "./api";
+import { SearchPicker } from "./SearchPicker";
+import { CreateAccountDialog } from "./CreateAccountDialog";
 import { editable } from "./reviewEditing";
 import type { ReviewEdits } from "./reviewEditing";
 
@@ -85,6 +93,8 @@ function Cell({
   const { key, label } = column;
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState("");
+  const [creating, setCreating] = useState<string | null>(null);
+  const [requested, setRequested] = useState<AccountRequest | null>(null);
   const original = useRef(row);
   const selectOnFocus = useRef(true);
   const button = useRef<HTMLButtonElement>(null);
@@ -104,7 +114,14 @@ function Cell({
         : key === "category"
           ? catalog.categories.map((c) => c.name)
           : key === "account"
-            ? ["Use automatic account", ...catalog.accounts.map((a) => a.name)]
+            ? [
+                ...new Set([
+                  "Use automatic account",
+                  ...catalog.accounts.map((a) => a.name),
+                  ...(catalog.account_requests || []).map((a) => a.name),
+                  ...(requested ? [requested.name] : []),
+                ]),
+              ]
             : key === "tag"
               ? catalog.tags
                   .filter(
@@ -134,6 +151,13 @@ function Cell({
   };
   const change = (value: string) => {
     setText(value);
+    // Preserve the catalog's exact spelling after case-insensitive matching.
+    if (choices)
+      value =
+        choices.find(
+          (option) =>
+            option.toLocaleLowerCase() === value.trim().toLocaleLowerCase(),
+        ) || value;
     let parsed: Fields[keyof Fields] = value || null;
     let message = "";
     if (key === "amount_minor" && value) {
@@ -154,7 +178,10 @@ function Cell({
     )
       message = "Enter a valid date as YYYY-MM-DD.";
     if (choices && value && !choices.includes(value))
-      message = "Choose a value from the list.";
+      message =
+        key === "account"
+          ? "Choose an account or confirm creation of a new one."
+          : "Choose a value from the list.";
     if (key === "payee" && value.length > 300)
       message = "Payee must be 300 characters or fewer.";
     if (key === "memo" && value.length > 2000)
@@ -240,7 +267,28 @@ function Cell({
       >
         {display(row, key)}
       </button>
-      {editing && (
+      {editing && choices && !creating && (
+        <SearchPicker
+          id={id}
+          label={`Edit ${label}`}
+          value={text}
+          options={choices}
+          error={error}
+          busy={busy}
+          onChange={change}
+          onKeyDown={onKey}
+          onBlur={() => {
+            if (!error) setEditing(false);
+          }}
+          onChoose={(value) => {
+            change(value);
+            setEditing(false);
+            button.current?.focus();
+          }}
+          onCreate={key === "account" ? (name) => setCreating(name) : undefined}
+        />
+      )}
+      {editing && !choices && (
         <input
           autoFocus
           aria-label={`Edit ${label}`}
@@ -250,7 +298,6 @@ function Cell({
           readOnly={busy}
           inputMode={key === "amount_minor" ? "decimal" : undefined}
           placeholder={key === "date" ? "YYYY-MM-DD" : undefined}
-          list={choices ? `${id}-options` : undefined}
           value={text}
           onChange={(event) => change(event.target.value)}
           onFocus={(event) => {
@@ -262,19 +309,44 @@ function Cell({
           onKeyDown={onKey}
         />
       )}
-      {choices && editing && (
-        <datalist id={`${id}-options`}>
-          {choices.map((value) => (
-            <option key={value} value={value} />
-          ))}
-        </datalist>
+      {creating && (
+        <CreateAccountDialog
+          name={creating}
+          onCancel={() => {
+            setCreating(null);
+            edits.restoreCell(row.id, original.current, key);
+            setEditing(false);
+            button.current?.focus();
+          }}
+          onCreated={(request) => {
+            setRequested(request);
+            edits.invalid(row.id, key, "");
+            edits.update(row.id, "account", request.name);
+            setCreating(null);
+            setEditing(false);
+            button.current?.focus();
+            save();
+          }}
+        />
       )}
       {key === "account" && (
         <small>
-          {row.data.account_override ? "Override" : "Automatic by payment year"}
+          {row.data.account_override ? "Override" : "Automatic · latest year"}
         </small>
       )}
       {missing && <small>{label} required</small>}
+      {key === "account" &&
+        !catalog.accounts.some((a) => a.name === row.data.account) && (
+          <small role="status">
+            {
+              (
+                catalog.account_requests?.find(
+                  (a) => a.name === row.data.account,
+                ) || (requested?.name === row.data.account ? requested : null)
+              )?.message
+            }
+          </small>
+        )}
       {error && (
         <small id={`${id}-error`} role="alert">
           {error}

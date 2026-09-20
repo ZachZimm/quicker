@@ -81,7 +81,16 @@ export function upload(
     request.send(body);
   });
 }
+export type AccountRequest = {
+  id: string;
+  name: string;
+  account_type: string;
+  status: string;
+  message: string;
+  file_name?: string;
+};
 export type Catalog = {
+  account_requests?: AccountRequest[];
   accounts: { name: string; type: string }[];
   categories: { name: string; type: string }[];
   tags: { name: string }[];

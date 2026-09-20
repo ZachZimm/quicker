@@ -170,7 +170,7 @@ def test_browser_rental_selection_preserves_expense_tag(browser_url, auth, db, p
         expect(page.get_by_role('dialog')).to_have_count(0)
         page.get_by_role('button', name='Details and source for Example Energy', exact=True).click()
         expect(page.get_by_label('Unit', exact=True)).to_have_value('2 Bell')
-        expect(page.get_by_role('combobox', name='Destination account', exact=True)).to_have_value('2026 Bell St.')
+        expect(page.get_by_role('combobox', name='Destination account', exact=True)).to_have_value('2027 Bell St.')
         page.get_by_label('Unit', exact=True).select_option('whole_property')
         expect(page.get_by_text('Quicken tags: Utilities', exact=True)).to_be_visible()
         page.get_by_label('Property or business', exact=True).select_option('R&K Properties')

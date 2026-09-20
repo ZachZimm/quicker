@@ -66,7 +66,7 @@ def test_base_address_unresolved_manual_unit_preserves_account_and_expense_tag(a
     assert row["data"]["property_address"]["street"] == "1008 Bell St"
     selected = action(auth, row, "approve", {**fields(row), "unit": "2 Bell"}).json()[0]
     assert selected["status"] == "approved"
-    assert selected["data"]["account"] == "2026 Bell St."
+    assert selected["data"]["account"] == "2027 Bell St."
     assert selected["quicken_tags"] == ["Utilities", "2 Bell"]
     assert selected["data"]["amount_minor"] == -21455
     # Changing rental clears the earlier approval and updates only the unit tag.
@@ -238,6 +238,7 @@ def test_legacy_units_and_tax_scope_migrate_with_audit(db, photo):
             ]
         )
         session.execute(text("DROP TABLE export_events"))
+        session.execute(text("DROP TABLE account_requests"))
         session.execute(text("DROP TABLE desktop_runs"))
         session.execute(text("DROP TABLE reference_exports"))
         session.execute(text("UPDATE alembic_version SET version_num='9b9eb6571ac7'"))
@@ -245,7 +246,8 @@ def test_legacy_units_and_tax_scope_migrate_with_audit(db, photo):
     with db.session() as session:
         unit = session.get(Candidate, "legacy-unit")
         assert unit.data["unit"] == "2 Bell" and unit.data["tag"] is None
-        assert unit.status == "approved" and unit.revision == 5
+        assert unit.status == "review" and unit.revision == 6
+        assert unit.data["account"] == "2027 Bell St."
         assert units.quicken_tags(unit.data) == ["2 Bell"]
         tax = session.get(Candidate, "legacy-tax")
         assert tax.data["unit"] == "whole_property" and tax.data["amount_minor"] == -40311
@@ -253,7 +255,7 @@ def test_legacy_units_and_tax_scope_migrate_with_audit(db, photo):
         assert len(audits) == 2
     db.migrate()
     with db.session() as session:
-        assert session.get(Candidate, "legacy-unit").revision == 5
+        assert session.get(Candidate, "legacy-unit").revision == 6
 
 
 def test_verified_utility_account_can_identify_property_without_address(monkeypatch):
@@ -319,7 +321,7 @@ def test_assign_property_and_unit_together_and_accept_property_alias(auth, db, p
     ).json()[0]
     assert selected["data"]["property"] == "Bell St."
     assert selected["data"]["unit"] == "2 Bell"
-    assert selected["data"]["account"] == "2026 Bell St."
+    assert selected["data"]["account"] == "2027 Bell St."
 
 
 def test_unit_tag_must_exist_in_catalog_before_approval(auth, db, photo):

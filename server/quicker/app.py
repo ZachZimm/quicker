@@ -12,6 +12,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, select, update
 
+from .accounts import install as install_accounts
+from .accounts import pending_accounts
 from .analysis_status import ModelConnection, worker_status
 from .catalog import catalog, coverage, route_list
 from .contracts import ModelConfig, ReviewAction
@@ -40,7 +42,7 @@ from .documents import MAX_FILE_BYTES, ingest, model_settings, pages_for, prepar
 from .extraction import ModelError, VisionAdapter
 from .profile import PREFERRED_CATEGORIES, canonical_property, property_directory
 from .reference_exports import MAX_EXPORT_BYTES, activate, reference_status, store_export
-from .review import ReviewError, apply_action, serialize
+from .review import ReviewError, apply_action, reconcile_reference, serialize
 from .security import digest, password_hash, password_matches
 
 
@@ -269,6 +271,7 @@ def create_app(database=None):
                 "properties": property_directory(routes),
                 "coverage": ref.get("coverage") or coverage(ref),
                 "preferred_categories": PREFERRED_CATEGORIES,
+                "account_requests": pending_accounts(session),
             }
 
     @app.post("/api/catalog")
@@ -347,6 +350,9 @@ def create_app(database=None):
                 raise HTTPException(422, "Choose existing accounts from the catalog")
             session.execute(delete(Route))
             session.add_all(Route(**r.model_dump()) for r in body)
+            session.flush()
+            ref = catalog(session)
+            reconcile_reference(session, ref, ref)
         return {"ok": True}
 
     @app.post("/api/upload")
@@ -590,7 +596,7 @@ def create_app(database=None):
             if body is not None:
                 safe = {
                     key: body[key]
-                    for key in ("protocol", "file_identity", "file_name", "ready", "message")
+                    for key in ("protocol", "file_identity", "file_name", "ready", "message", "account_creation")
                     if key in body
                 }
                 state = session.get(Setting, "desktop:" + device_id)
@@ -629,6 +635,7 @@ def create_app(database=None):
         return {"ok": True}
 
     install_desktop(app, db, authenticated, require_device)
+    install_accounts(app, db, authenticated, require_device)
 
     web_dist = Path(os.environ.get("QUICKER_WEB_DIST", Path(__file__).resolve().parents[2] / "web" / "dist"))
     if web_dist.exists():
