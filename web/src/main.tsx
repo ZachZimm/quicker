@@ -36,6 +36,14 @@ import type {
 import "./style.css";
 import { useDialogKeyboard } from "./accessibility";
 import { useReviewTools } from "./webmcp";
+import { changeField, useReviewEdits } from "./reviewEditing";
+import { ReviewRegister } from "./ReviewRegister";
+import {
+  AnalysisStatusPanel,
+  analysisLabel,
+  useAnalysisStatus,
+  waitingReason,
+} from "./AnalysisStatus";
 
 function CategoryOptions({ catalog }: { catalog: Catalog }) {
   const preferred = new Set(Object.values(catalog.preferred_categories || {}));
@@ -89,6 +97,7 @@ function App() {
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [uploader, setUploader] = useState(false);
+  const analysis = useAnalysisStatus(signedIn === true);
 
   const reload = useCallback(async () => {
     const [d, r, c, device, operation] = await Promise.all([
@@ -252,55 +261,60 @@ function App() {
               </h1>
             </div>
             <button className="primary" onClick={() => setUploader(true)}>
-              <Upload size={18} /> Upload documents
+              <Upload size={18} /> Upload & analyze
             </button>
           </div>
-          {tab === "review" && (
-            <>
-              <div className="metrics">
-                <div>
-                  <span>Needs review</span>
-                  <strong>{pending}</strong>
-                </div>
-                <div>
-                  <span>Approved</span>
-                  <strong>{approved}</strong>
-                </div>
-                <div>
-                  <span>Documents</span>
-                  <strong>{docs.length}</strong>
-                </div>
-                <div className="metric-note">
-                  <FolderArchive size={22} />
-                  <span>
-                    Original documents
-                    <br />
-                    kept in your archives
-                  </span>
-                </div>
-              </div>
-              {!catalog.accounts.length && (
-                <div className="setup-note">
-                  Import your Quicken QIF export to choose existing accounts,
-                  categories, and tags.{" "}
-                  <button className="link" onClick={() => setTab("settings")}>
-                    Open settings <ArrowRight size={15} />
-                  </button>
-                </div>
-              )}
-              <Review
-                error={error}
-                rows={rows}
-                docs={docs}
-                catalog={catalog}
-                run={run}
-                busy={busy}
-                onUpload={() => setUploader(true)}
-              />
-            </>
+          {["review", "documents"].includes(tab) && (
+            <AnalysisStatusPanel
+              {...analysis}
+              onSettings={() => setTab("settings")}
+            />
           )}
+          <div hidden={tab !== "review"}>
+            <div className="metrics">
+              <div>
+                <span>Needs review</span>
+                <strong>{pending}</strong>
+              </div>
+              <div>
+                <span>Approved</span>
+                <strong>{approved}</strong>
+              </div>
+              <div>
+                <span>Documents</span>
+                <strong>{docs.length}</strong>
+              </div>
+              <div className="metric-note">
+                <FolderArchive size={22} />
+                <span>
+                  Original documents
+                  <br />
+                  kept in your archives
+                </span>
+              </div>
+            </div>
+            {!catalog.accounts.length && (
+              <div className="setup-note">
+                Import your Quicken QIF export to choose existing accounts,
+                categories, and tags.{" "}
+                <button className="link" onClick={() => setTab("settings")}>
+                  Open settings <ArrowRight size={15} />
+                </button>
+              </div>
+            )}
+            <Review
+              error={error}
+              rows={rows}
+              docs={docs}
+              catalog={catalog}
+              run={run}
+              busy={busy}
+              onUpload={() => setUploader(true)}
+            />
+          </div>
           {tab === "documents" && (
             <Documents
+              analysis={analysis.status}
               error={error}
               docs={docs}
               rows={rows}
@@ -327,7 +341,7 @@ function App() {
             setUploader(false);
             setTab("documents");
             setNotice(
-              "Originals stored. Extraction will begin when the worker is running.",
+              "Originals saved. Analysis starts automatically when the worker is available.",
             );
           }}
         />
@@ -433,15 +447,17 @@ function Review({
   const [query, setQuery] = useState("");
   const [history, setHistory] = useState<any[] | null>(null);
   useReviewTools(rows, setFilter);
-  const visible = rows.filter(
+  const edits = useReviewEdits(rows, catalog);
+  const visible = edits.rows.filter(
     (r) =>
-      (filter === "all" || r.status === filter) &&
-      (r.data.payee || "").toLowerCase().includes(query.toLowerCase()),
+      r.id === edits.focused ||
+      ((filter === "all" || r.status === filter) &&
+        (r.data.payee || "").toLowerCase().includes(query.toLowerCase())),
   );
   const chosen = visible.filter(
     (r) => selected.has(r.id) && !["entering", "entered"].includes(r.status),
   );
-  const current = rows.find((r) => r.id === active);
+  const current = edits.rows.find((r) => r.id === active);
   const doc = docs.find((d) => d.id === draft?.document_id);
   const properties = [...new Set(catalog.routes.map((r) => r.property))].sort();
   const act = async (
@@ -450,59 +466,49 @@ function Review({
     fields?: (r: Transaction) => Fields,
   ) => {
     const ok = await run(
-      () =>
-        post("/review", {
+      async () => {
+        const saved = await Promise.all(
+          items.map((r) =>
+            r.id === active
+              ? Promise.resolve(r)
+              : action === "remove"
+                ? edits.forRemoval(r.id)
+                : edits.save(r.id),
+          ),
+        );
+        const result = await post<Transaction[]>("/review", {
           action,
-          rows: items.map((r) => ({
+          rows: saved.map((r) => ({
             id: r.id,
             revision: r.revision,
             ...(fields ? { fields: fields(r) } : {}),
           })),
-        }),
+        });
+        edits.accept(result);
+      },
       `${items.length} transaction${items.length === 1 ? "" : "s"} ${action === "save" ? "saved" : action === "approve" ? "approved" : action === "remove" ? "removed" : "restored"}.`,
     );
     if (ok) {
       setSelected(new Set());
+      edits.setFocused(null);
       if (items.length === 1 && items[0].id === active) {
         setDraft(null);
         setActive(null);
       }
     }
   };
-  const open = (r: Transaction) => {
-    setActive(r.id);
-    setDraft(structuredClone(r));
-    setHistory(null);
+  const open = async (r: Transaction) => {
+    try {
+      const saved = await edits.save(r.id);
+      setActive(saved.id);
+      setDraft(structuredClone(saved));
+      setHistory(null);
+    } catch (error) {
+      await run(() => Promise.reject(error));
+    }
   };
-  const update = (key: keyof Fields, value: any) =>
-    setDraft((d) => {
-      if (!d) return d;
-      const data = { ...d.data, [key]: value };
-      if (key === "property" && value !== d.data.property) {
-        data.unit = "unresolved";
-        data.unit_evidence = null;
-      }
-      if (key === "unit") data.unit_evidence = "Assigned during review.";
-      if (
-        [
-          "payee",
-          "date",
-          "amount_minor",
-          "property",
-          "unit",
-          "account",
-        ].includes(key)
-      )
-        data.duplicate_acknowledged = false;
-      if ((key === "property" || key === "date") && !data.account_override)
-        data.account =
-          catalog.routes.find(
-            (r) =>
-              r.property === data.property &&
-              r.year === Number(data.date?.slice(0, 4)),
-          )?.account || null;
-      return { ...d, data };
-    });
+  const update = (key: keyof Fields, value: Fields[keyof Fields]) =>
+    setDraft((d) => (d ? changeField(d, key, value, catalog) : d));
   const toggle = (id: string) =>
     setSelected((s) => {
       const next = new Set(s);
@@ -640,136 +646,18 @@ function Review({
         </div>
       )}
       {visible.length ? (
-        <div className="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th className="check-cell">
-                  <input
-                    type="checkbox"
-                    aria-label="Select all visible transactions"
-                    checked={
-                      visible.length > 0 &&
-                      visible.every((r) => selected.has(r.id))
-                    }
-                    onChange={(e) =>
-                      setSelected(
-                        new Set(
-                          e.target.checked
-                            ? visible
-                                .filter(
-                                  (r) =>
-                                    !["entering", "entered"].includes(r.status),
-                                )
-                                .map((r) => r.id)
-                            : [],
-                        ),
-                      )
-                    }
-                  />
-                </th>
-                <th>Payee / source</th>
-                <th>Payment date</th>
-                <th>Property / account</th>
-                <th>Category</th>
-                <th className="number">Amount</th>
-                <th>Status</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {visible.map((r) => (
-                <tr key={r.id} className={active === r.id ? "active-row" : ""}>
-                  <td>
-                    <input
-                      type="checkbox"
-                      aria-label={`Select ${r.data.payee || "unknown payee"}`}
-                      disabled={["entering", "entered"].includes(r.status)}
-                      checked={selected.has(r.id)}
-                      onChange={() => toggle(r.id)}
-                    />
-                  </td>
-                  <td>
-                    <button className="payee-button" onClick={() => open(r)}>
-                      {r.data.payee || "Unknown payee"}
-                    </button>
-                    <small>
-                      {docs.find((d) => d.id === r.document_id)?.name}
-                    </small>
-                  </td>
-                  <td>
-                    {r.data.date || (
-                      <span
-                        className={
-                          r.status === "existing" ? "muted" : "missing"
-                        }
-                      >
-                        {r.status === "existing"
-                          ? "Not printed"
-                          : "Date required"}
-                      </span>
-                    )}
-                  </td>
-                  <td>
-                    {r.data.property || (
-                      <span className="missing">Unassigned</span>
-                    )}
-                    <small>{r.data.account || "Choose an account"}</small>
-                    {r.data.property && (
-                      <small>
-                        {r.data.unit === "whole_property"
-                          ? "Whole property"
-                          : r.data.unit === "unresolved" || !r.data.unit
-                            ? "Unit unresolved"
-                            : r.data.unit}
-                      </small>
-                    )}
-                  </td>
-                  <td>
-                    {r.data.category || (
-                      <span className="missing">Choose category</span>
-                    )}
-                  </td>
-                  <td
-                    className={
-                      "number " +
-                      (r.data.amount_minor && r.data.amount_minor > 0
-                        ? "positive"
-                        : "")
-                    }
-                  >
-                    {money(r.data.amount_minor)}
-                  </td>
-                  <td>
-                    <span className={"badge " + r.status}>
-                      {r.status === "review"
-                        ? r.issues.length
-                          ? `${r.issues.length} to resolve`
-                          : "Ready to approve"
-                        : r.status === "existing"
-                          ? "Already in Quicken"
-                          : r.status}
-                    </span>
-                    {!["existing", "entered", "entering"].includes(r.status) &&
-                      (r.duplicates.length > 0 ||
-                        (r.historical_duplicates?.length || 0) > 0) && (
-                        <small className="missing">Possible duplicate</small>
-                      )}
-                  </td>
-                  <td>
-                    <button
-                      className="icon-button"
-                      aria-label={`Review ${r.data.payee || "transaction"}`}
-                      onClick={() => open(r)}
-                    >
-                      <ArrowRight size={17} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ReviewRegister
+          rows={visible}
+          docs={docs}
+          catalog={catalog}
+          edits={edits}
+          selected={selected}
+          toggle={toggle}
+          selectAll={(ids) => setSelected(new Set(ids))}
+          busy={busy}
+          open={open}
+          act={act}
+        />
       ) : (
         <div className="empty">
           <div className="empty-icon">
@@ -782,11 +670,11 @@ function Review({
           </h2>
           <p>
             {docs.some((d) => ["queued", "extracting"].includes(d.status))
-              ? "Documents are queued or being read. Transactions will appear here when extraction finishes."
+              ? "Documents are waiting for analysis or being analyzed. Transactions will appear here automatically."
               : "Upload invoices, tax receipts, or card statements to prepare transactions for review."}
           </p>
           <button onClick={onUpload}>
-            <Plus size={17} /> Upload documents
+            <Plus size={17} /> Upload & analyze
           </button>
         </div>
       )}
@@ -844,9 +732,7 @@ function Review({
                 )}
                 {draft.warnings.length > 0 && (
                   <details>
-                    <summary>
-                      Extraction notes ({draft.warnings.length})
-                    </summary>
+                    <summary>Analysis notes ({draft.warnings.length})</summary>
                     {draft.warnings.map((w, i) => (
                       <p key={i}>{w}</p>
                     ))}
@@ -972,25 +858,7 @@ function Review({
                       checked={draft.data.account_override}
                       onChange={(e) => {
                         const checked = e.target.checked;
-                        setDraft((d) =>
-                          d
-                            ? {
-                                ...d,
-                                data: {
-                                  ...d.data,
-                                  account_override: checked,
-                                  account: checked
-                                    ? d.data.account
-                                    : catalog.routes.find(
-                                        (r) =>
-                                          r.property === d.data.property &&
-                                          r.year ===
-                                            Number(d.data.date?.slice(0, 4)),
-                                      )?.account || null,
-                                },
-                              }
-                            : d,
-                        );
+                        update("account_override", checked);
                       }}
                     />
                     Override the account selected by payment year
@@ -1320,10 +1188,10 @@ function UploadDialog({
         className="modal"
         role="dialog"
         aria-modal="true"
-        aria-label="Upload documents"
+        aria-label="Upload & analyze"
       >
         <div className="drawer-heading">
-          <h2>Upload documents</h2>
+          <h2>Upload & analyze</h2>
           <button
             disabled={progress !== null}
             onClick={onClose}
@@ -1434,7 +1302,7 @@ function UploadDialog({
           }}
         >
           <Upload size={17} />
-          Upload {files.length || ""} {files.length === 1 ? "photo" : "photos"}
+          Upload & analyze
         </button>
       </section>
     </div>
@@ -1442,31 +1310,35 @@ function UploadDialog({
 }
 
 function Documents({
+  analysis,
   error,
   docs,
   rows,
   run,
   onUpload,
 }: {
+  analysis: ReturnType<typeof useAnalysisStatus>["status"];
   error: string;
   docs: DocumentRecord[];
   rows: Transaction[];
   run: Run;
   onUpload: () => void;
 }) {
-  const [active, setActive] = useState<DocumentRecord | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const active = docs.find((d) => d.id === activeId);
   const [attempts, setAttempts] = useState<any[] | null>(null);
+  const [reanalyzing, setReanalyzing] = useState(false);
   return (
     <>
       <p className="muted">
         Original documents are retained, including ignored items and
-        unsuccessful extractions.
+        unsuccessful analysis attempts.
       </p>
       {!docs.length ? (
         <div className="empty">
           <FileText size={30} />
           <h2>No documents yet</h2>
-          <button onClick={onUpload}>Upload your first document</button>
+          <button onClick={onUpload}>Upload & analyze</button>
         </div>
       ) : (
         <div className="document-grid">
@@ -1475,7 +1347,7 @@ function Documents({
               <button
                 className="document-thumbnail"
                 onClick={() => {
-                  setActive(doc);
+                  setActiveId(doc.id);
                   setAttempts(null);
                 }}
               >
@@ -1486,7 +1358,18 @@ function Documents({
                 />
               </button>
               <div className="document-card-body">
-                <span className={"badge " + doc.status}>{doc.status}</span>
+                <span className={"badge " + doc.status}>
+                  {analysisLabel(doc.status)}
+                </span>
+                {waitingReason(doc, analysis) && (
+                  <p>{waitingReason(doc, analysis)}</p>
+                )}
+                {doc.analysis && !doc.analysis.uses_current_settings && (
+                  <p className="missing">
+                    This analysis uses earlier model settings. Analyze again
+                    after it finishes to use the current settings.
+                  </p>
+                )}
                 <h3>{doc.name}</h3>
                 <p>
                   {doc.pages.length} page{doc.pages.length === 1 ? "" : "s"} ·{" "}
@@ -1501,7 +1384,7 @@ function Documents({
                 {doc.error && <p className="field-error">{doc.error}</p>}
                 <button
                   onClick={() => {
-                    setActive(doc);
+                    setActiveId(doc.id);
                     setAttempts(null);
                   }}
                 >
@@ -1523,7 +1406,7 @@ function Documents({
             <div className="drawer-heading">
               <h2>{active.name}</h2>
               <button
-                onClick={() => setActive(null)}
+                onClick={() => setActiveId(null)}
                 aria-label="Close document"
               >
                 <X size={20} />
@@ -1534,6 +1417,13 @@ function Documents({
                 {error}
               </div>
             )}
+            <p className={"badge " + active.status}>
+              {analysisLabel(active.status)}
+            </p>
+            {waitingReason(active, analysis) && (
+              <p>{waitingReason(active, analysis)}</p>
+            )}
+            {active.error && <p className="field-error">{active.error}</p>}
             <SourceViewer doc={active} />
             <DocumentCorrections key={active.id} doc={active} run={run} />
             {active.ignored.length > 0 && (
@@ -1556,22 +1446,25 @@ function Documents({
                   );
                 }}
               >
-                Extraction history
+                Analysis history
               </button>
               {["failed", "ready"].includes(active.status) && (
                 <button
+                  disabled={reanalyzing}
                   onClick={async () => {
+                    setReanalyzing(true);
                     if (
                       await run(
                         () => post(`/documents/${active.id}/retry`),
-                        "Document queued with current model settings.",
+                        "Waiting for analysis with current model settings. Saved edits and removed transactions are preserved.",
                       )
                     )
-                      setActive(null);
+                      setActiveId(null);
+                    setReanalyzing(false);
                   }}
                 >
                   <RefreshCw size={16} />
-                  Retry extraction
+                  Analyze again
                 </button>
               )}
             </div>
@@ -1657,7 +1550,7 @@ function DocumentCorrections({ doc, run }: { doc: DocumentRecord; run: Run }) {
         Add missed transaction
       </button>
       <p>
-        Run extraction again to compare new results with saved rows. Saved edits
+        Choose Analyze again to compare new results with saved rows. Saved edits
         and removed rows are preserved.
       </p>
       <button
@@ -1671,7 +1564,7 @@ function DocumentCorrections({ doc, run }: { doc: DocumentRecord; run: Run }) {
               .find((a) => a.result.comparison);
             if (!latest)
               throw new Error(
-                "No comparison yet. Retry extraction and wait for it to finish.",
+                "No comparison yet. Choose Analyze again and wait for analysis to finish.",
               );
             setComparison(
               await api(
@@ -1683,11 +1576,11 @@ function DocumentCorrections({ doc, run }: { doc: DocumentRecord; run: Run }) {
           setWorking(false);
         }}
       >
-        Compare extraction
+        Compare analysis
       </button>
       {comparison && (
         <>
-          <h4>Extraction comparison</h4>
+          <h4>Analysis comparison</h4>
           <p>
             Only selected missing rows will be added. Matches include earlier
             versions of edited rows.
@@ -1842,7 +1735,7 @@ function Settings({ catalog, run }: { catalog: Catalog; run: Run }) {
       setKey("");
       setClearKey(false);
       setConfig(await api("/settings"));
-    }, "Model settings saved. New extractions will use this revision.");
+    }, "Model settings saved. New analyses will use these settings.");
   return (
     <div className="settings-grid">
       <section className="panel">
@@ -2002,7 +1895,7 @@ function Settings({ catalog, run }: { catalog: Catalog; run: Run }) {
                 />
               </label>
               <label>
-                Concurrent extractions
+                Concurrent analyses
                 <input
                   type="number"
                   min="1"

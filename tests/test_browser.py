@@ -38,7 +38,7 @@ def test_browser_requests_entry_and_displays_verified_result(browser_url, auth, 
         page.screenshot(path=".local/windows-entry-browser.png", full_page=True)
         page.get_by_role("navigation", name="Main navigation").get_by_role("button", name="Review", exact=False).click()
         page.get_by_role("tab", name="Entered", exact=False).click()
-        page.get_by_role("button", name="Desktop Test", exact=True).click()
+        page.get_by_role("button", name="Details and source for Desktop Test", exact=True).click()
         expect(page.get_by_text("Verified in a fresh Quicken export.", exact=True)).to_be_visible()
         expect(page.get_by_role("button", name="Save & approve")).to_have_count(0)
         browser.close()
@@ -55,33 +55,33 @@ def test_browser_upload_review_remove_restore_and_settings(browser_url, db, phot
         page.get_by_label("Password", exact=True).fill("test-password-12345")
         page.get_by_role("button", name="Sign in", exact=True).click()
         expect(page.get_by_role("heading", name="Review transactions")).to_be_visible()
-        page.get_by_role("button", name="Upload documents", exact=True).first.click()
+        page.get_by_role("button", name="Upload & analyze", exact=True).first.click()
         page.locator("input[type=file]").set_input_files(
             {"name": "test-invoice.png", "mimeType": "image/png", "buffer": photo}
         )
-        page.get_by_role("button", name="Upload 1 photo", exact=True).click()
+        page.get_by_role("dialog").get_by_role("button", name="Upload & analyze", exact=True).click()
         expect(page.get_by_role("heading", name="Source documents")).to_be_visible()
         assert process_one(db, InvoiceAdapter)
         page.get_by_role("button", name="Review", exact=False).first.click()
         page.reload()
-        page.get_by_role("button", name="Example Energy", exact=True).click()
+        page.get_by_role("button", name="Details and source for Example Energy", exact=True).click()
         page.keyboard.press("Escape")
         expect(page.get_by_role("dialog")).to_have_count(0)
-        page.get_by_role("button", name="Example Energy", exact=True).click()
+        page.get_by_role("button", name="Details and source for Example Energy", exact=True).click()
         page.get_by_role("button", name="Save & approve").click()
         expect(page.get_by_role("dialog").get_by_role("alert")).to_contain_text("date")
         page.get_by_label("Payment / transaction date", exact=True).fill("2026-08-10")
         page.get_by_role("button", name="Save & approve").click()
         expect(page.get_by_role("dialog")).to_have_count(0)
         page.get_by_role("tab", name="Approved").click()
-        expect(page.get_by_role("button", name="Example Energy", exact=True)).to_be_visible()
+        expect(page.get_by_role("button", name="Details and source for Example Energy", exact=True)).to_be_visible()
         page.get_by_label("Select Example Energy", exact=True).check()
         page.get_by_role("button", name="Remove", exact=True).click()
         page.get_by_role("tab", name="Removed").click()
         page.get_by_label("Select Example Energy", exact=True).check()
         page.get_by_role("button", name="Restore", exact=True).click()
         page.get_by_role("tab", name="Needs review").click()
-        expect(page.get_by_role("button", name="Example Energy", exact=True)).to_be_visible()
+        expect(page.get_by_role("button", name="Details and source for Example Energy", exact=True)).to_be_visible()
         Path(".local").mkdir(exist_ok=True)
         page.screenshot(path=".local/qa-desktop.png", full_page=True)
         page.get_by_role("button", name="Settings", exact=True).click()
@@ -121,7 +121,7 @@ def test_browser_reference_coverage_and_historical_duplicate_review(browser_url,
         page.get_by_label("Username", exact=True).fill("admin")
         page.get_by_label("Password", exact=True).fill("test-password-12345")
         page.get_by_role("button", name="Sign in", exact=True).click()
-        page.get_by_role("button", name="Spectrum 855-707-7328 MO", exact=True).click()
+        page.get_by_role("button", name="Details and source for Spectrum 855-707-7328 MO", exact=True).click()
         expect(page.get_by_role("heading", name="Matching Quicken transactions")).to_be_visible()
         expect(page.locator(".history-match")).to_have_count(2)
         expect(page.locator(".historical-matches")).to_contain_text("R&K Properties 2026")
@@ -161,14 +161,14 @@ def test_browser_rental_selection_preserves_expense_tag(browser_url, auth, db, p
         page.get_by_label('Password', exact=True).fill('test-password-12345')
         page.get_by_role('button', name='Sign in', exact=True).click()
         expect(page.get_by_text('Unit unresolved', exact=True)).to_be_visible()
-        page.get_by_role('button', name='Example Energy', exact=True).click()
+        page.get_by_role('button', name='Details and source for Example Energy', exact=True).click()
         expect(page.get_by_label('Unit', exact=True)).to_have_value('unresolved')
         expect(page.get_by_text('Printed utility account: 001-234', exact=True)).to_be_visible()
         page.get_by_label('Unit', exact=True).select_option('2 Bell')
         expect(page.get_by_text('Quicken tags: Utilities, 2 Bell', exact=True)).to_be_visible()
         page.get_by_role('button', name='Save for review', exact=True).click()
         expect(page.get_by_role('dialog')).to_have_count(0)
-        page.get_by_role('button', name='Example Energy', exact=True).click()
+        page.get_by_role('button', name='Details and source for Example Energy', exact=True).click()
         expect(page.get_by_label('Unit', exact=True)).to_have_value('2 Bell')
         expect(page.get_by_role('combobox', name='Destination account', exact=True)).to_have_value('2026 Bell St.')
         page.get_by_label('Unit', exact=True).select_option('whole_property')
@@ -196,14 +196,14 @@ def test_browser_corrections_and_existing_link(browser_url, auth, db, photo):
         page.get_by_label("Username", exact=True).fill("admin")
         page.get_by_label("Password", exact=True).fill("test-password-12345")
         page.get_by_role("button", name="Sign in", exact=True).click()
-        page.get_by_role("button", name="Example Energy", exact=True).click()
+        page.get_by_role("button", name="Details and source for Example Energy", exact=True).click()
         page.get_by_label("Payment / transaction date", exact=True).fill("2026-07-19")
         page.get_by_role("button", name="Save for review", exact=True).click()
-        page.get_by_role("button", name="Example Energy", exact=True).click()
+        page.get_by_role("button", name="Details and source for Example Energy", exact=True).click()
         page.get_by_role("button", name="Already in Quicken", exact=True).click()
         page.get_by_role("tab", name="Already in Quicken").click()
-        expect(page.get_by_role("button", name="Example Energy", exact=True)).to_be_visible()
-        page.get_by_role("button", name="Example Energy", exact=True).click()
+        expect(page.get_by_role("button", name="Details and source for Example Energy", exact=True)).to_be_visible()
+        page.get_by_role("button", name="Details and source for Example Energy", exact=True).click()
         expect(page.get_by_role("button", name="Restore to review")).to_be_visible()
         page.keyboard.press("Escape")
         page.get_by_role("button", name="Documents", exact=False).first.click()
@@ -211,14 +211,14 @@ def test_browser_corrections_and_existing_link(browser_url, auth, db, photo):
         page.get_by_label("Source description", exact=True).fill("Missed paper receipt")
         page.get_by_role("button", name="Add missed transaction", exact=True).click()
         expect(page.get_by_label("Source description", exact=True)).to_have_value("")
-        page.get_by_role("button", name="Retry extraction", exact=True).click()
+        page.get_by_role("button", name="Analyze again", exact=True).click()
         expect(page.get_by_role("dialog")).to_have_count(0)
         assert process_one(db, ExtraRowAdapter)
         page.reload()
         page.get_by_role("button", name="Documents", exact=False).first.click()
         page.get_by_role("button", name="Open document", exact=False).first.click()
-        page.get_by_role("button", name="Compare extraction", exact=True).click()
-        expect(page.get_by_role("heading", name="Extraction comparison")).to_be_visible()
+        page.get_by_role("button", name="Compare analysis", exact=True).click()
+        expect(page.get_by_role("heading", name="Analysis comparison")).to_be_visible()
         page.get_by_label("Page 1: Missed Merchant", exact=False).check()
         page.get_by_role("button", name="Add selected missing rows").click()
         expect(page.get_by_role("button", name="Add selected missing rows")).to_be_disabled()
@@ -247,11 +247,11 @@ def test_http_lan_upload_and_repeated_manual_corrections(browser_url, db, photo)
         page.get_by_label("Username", exact=True).fill("admin")
         page.get_by_label("Password", exact=True).fill("test-password-12345")
         page.get_by_role("button", name="Sign in", exact=True).click()
-        page.get_by_role("button", name="Upload documents", exact=True).first.click()
+        page.get_by_role("button", name="Upload & analyze", exact=True).first.click()
         page.locator("input[type=file]").set_input_files(
             {"name": "lan-invoice.png", "mimeType": "image/png", "buffer": photo}
         )
-        page.get_by_role("button", name="Upload 1 photo", exact=True).click()
+        page.get_by_role("dialog").get_by_role("button", name="Upload & analyze", exact=True).click()
         expect(page.get_by_role("heading", name="Source documents")).to_be_visible()
         assert process_one(db, InvoiceAdapter)
         page.get_by_role("button", name="Open document", exact=False).first.click()
@@ -268,4 +268,78 @@ def test_http_lan_upload_and_repeated_manual_corrections(browser_url, db, photo)
                 "First missed receipt", "Second missed receipt",
             }
         assert not errors
+        browser.close()
+
+
+def test_browser_keeps_login_after_closing_and_reopening(browser_url, tmp_path):
+    import time
+
+    with sync_playwright() as p:
+        profile = tmp_path / "browser-profile"
+        context = p.chromium.launch_persistent_context(str(profile), headless=True)
+        page = context.new_page()
+        page.goto(browser_url)
+        page.get_by_label("Username", exact=True).fill("admin")
+        page.get_by_label("Password", exact=True).fill("test-password-12345")
+        page.get_by_role("button", name="Sign in", exact=True).click()
+        expect(page.get_by_role("heading", name="Review transactions")).to_be_visible()
+        cookie = next(c for c in context.cookies() if c["name"] == "quicker_session")
+        assert cookie["expires"] > time.time() + 399 * 86400
+        context.close()
+        reopened = p.chromium.launch_persistent_context(str(profile), headless=True)
+        page = reopened.new_page()
+        page.goto(browser_url)
+        expect(page.get_by_role("heading", name="Review transactions")).to_be_visible()
+        expect(page.get_by_role("button", name="Sign in", exact=True)).to_have_count(0)
+        reopened.close()
+
+
+def test_browser_analysis_waiting_status_and_live_document_progress(browser_url, auth, db, photo, monkeypatch):
+    import time
+
+    from quicker.analysis_status import ModelConnection, heartbeat
+    from quicker.db import Document, Job
+    from sqlalchemy import select
+    from test_workflow import upload
+
+    uploaded = upload(auth, photo)
+    doc_id = uploaded["document_ids"][0]
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 1440, "height": 1000})
+        page.goto(browser_url)
+        page.get_by_label("Username", exact=True).fill("admin")
+        page.get_by_label("Password", exact=True).fill("test-password-12345")
+        page.get_by_role("button", name="Sign in", exact=True).click()
+        panel = page.get_by_role("region", name="Document analysis status")
+        expect(panel).to_contain_text("Worker: No recent heartbeat")
+        expect(panel).to_contain_text("Model connection: Needs attention")
+        page.get_by_role("navigation").get_by_role("button", name="Documents", exact=True).click()
+        expect(page.locator(".document-card .badge")).to_have_text("Waiting for analysis")
+        expect(page.locator(".document-card")).to_contain_text("start automatically")
+        page.get_by_role("button", name="Open document", exact=False).click()
+        dialog = page.get_by_role("dialog")
+        expect(dialog).to_contain_text("Waiting for analysis")
+        expect(dialog.get_by_role("button", name="Analyze again")).to_have_count(0)
+        heartbeat(db, "test-worker", 1, 1)
+        monkeypatch.setattr(ModelConnection, "status", lambda self, cfg: {
+            "state": "connected", "message": "Model server is reachable.",
+            "checked_at": int(time.time()), "name": cfg.model,
+        })
+        with db.write() as session:
+            session.get(Document, doc_id).status = "extracting"
+            job = session.scalar(select(Job))
+            job.status = "running"
+            job.lease_until = 0
+        # The open document follows polling updates instead of keeping a stale snapshot.
+        expect(dialog.locator(".badge")).to_have_text("Analyzing", timeout=10000)
+        expect(panel).to_contain_text("Model connection: Connected", timeout=10000)
+        assert process_one(db, InvoiceAdapter)
+        expect(dialog.locator(".badge")).to_have_text("Analysis complete", timeout=10000)
+        expect(dialog.get_by_role("button", name="Analyze again")).to_be_visible()
+        dialog.get_by_role("button", name="Analyze again").click()
+        expect(dialog).to_have_count(0)
+        expect(page.locator(".document-card .badge")).to_have_text("Waiting for analysis")
+        assert len(auth.get("/api/transactions").json()) == 1
+        page.screenshot(path=".local/document-analysis-status.png", full_page=True)
         browser.close()

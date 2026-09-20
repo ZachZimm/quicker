@@ -10,8 +10,9 @@ from fastapi import Body, Depends, FastAPI, File, Form, HTTPException, Request, 
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 
+from .analysis_status import ModelConnection, worker_status
 from .catalog import catalog, coverage, route_list
 from .contracts import ModelConfig, ReviewAction
 from .corrections import AcceptProposals, ManualRow, accept_proposals, add_manual, comparison
@@ -69,9 +70,22 @@ class RouteInput(BaseModel):
 
 
 DUMMY_HASH = password_hash("unused timing reference")
+SESSION_COOKIE_MAX_AGE = 400 * 24 * 60 * 60
+
+
+def set_session_cookie(response, token):
+    response.set_cookie(
+        "quicker_session",
+        token,
+        httponly=True,
+        samesite="strict",
+        max_age=SESSION_COOKIE_MAX_AGE,
+        secure=os.environ.get("QUICKER_COOKIE_SECURE", "false").lower() == "true",
+    )
 
 
 def create_app(database=None):
+    model_connection = ModelConnection()
     db = database or Database()
 
     @asynccontextmanager
@@ -97,6 +111,9 @@ def create_app(database=None):
         )
         if request.url.path.startswith("/api/"):
             response.headers["Cache-Control"] = "no-store"
+        token = getattr(request.state, "browser_session_token", None)
+        if token and response.status_code < 400:
+            set_session_cookie(response, token)
         return response
 
     def authenticated(request: Request):
@@ -119,7 +136,7 @@ def create_app(database=None):
                 return {"device_id": device.id}
             token = request.cookies.get("quicker_session", "")
             stored = session.get(BrowserSession, digest(token)) if token else None
-            if not stored or stored.expires < int(time.time()):
+            if not stored or (stored.expires != 0 and stored.expires < int(time.time())):
                 raise HTTPException(401, "Sign in to continue")
             if request.method not in ("GET", "HEAD", "OPTIONS"):
                 origin = request.headers.get("origin")
@@ -127,7 +144,22 @@ def create_app(database=None):
                     raise HTTPException(403, "Request origin does not match")
                 if not secrets.compare_digest(request.headers.get("x-csrf-token", ""), stored.csrf):
                     raise HTTPException(403, "Session verification failed. Reload and try again.")
-            return {"csrf": stored.csrf}
+        if stored.expires != 0:
+            # Upgrade a still-valid legacy session without reviving revoked/expired sessions.
+            with db.write() as session:
+                session.execute(
+                    update(BrowserSession)
+                    .where(
+                        BrowserSession.token_hash == stored.token_hash,
+                        BrowserSession.expires >= int(time.time()),
+                    )
+                    .values(expires=0)
+                )
+                current = session.get(BrowserSession, stored.token_hash)
+                if not current or current.expires != 0:
+                    raise HTTPException(401, "Sign in to continue")
+        request.state.browser_session_token = token
+        return {"csrf": stored.csrf}
 
     Auth = Annotated[dict, Depends(authenticated)]
 
@@ -160,20 +192,15 @@ def create_app(database=None):
             else:
                 if attempt:
                     session.delete(attempt)
-                session.execute(delete(BrowserSession).where(BrowserSession.expires < now))
+                session.execute(
+                    delete(BrowserSession).where(BrowserSession.expires > 0, BrowserSession.expires < now)
+                )
                 token, csrf = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
-                session.add(BrowserSession(token_hash=digest(token), csrf=csrf, expires=now + 43200))
+                session.add(BrowserSession(token_hash=digest(token), csrf=csrf, expires=0))
         if not valid:
             raise HTTPException(401, "Username or password is incorrect")
         response = JSONResponse({"csrf": csrf})
-        response.set_cookie(
-            "quicker_session",
-            token,
-            httponly=True,
-            samesite="strict",
-            max_age=43200,
-            secure=os.environ.get("QUICKER_COOKIE_SECURE", "false").lower() == "true",
-        )
+        set_session_cookie(response, token)
         return response
 
     @app.get("/api/session")
@@ -190,6 +217,7 @@ def create_app(database=None):
             )
         response = JSONResponse({"ok": True})
         response.delete_cookie("quicker_session")
+        request.state.browser_session_token = None
         return response
 
     @app.get("/api/settings")
@@ -198,6 +226,13 @@ def create_app(database=None):
             cfg = model_settings(session).model_dump()
         has_key = bool(cfg.pop("api_key", None))
         return {**cfg, "has_api_key": has_key}
+
+    @app.get("/api/analysis-status")
+    def analysis_status(auth: Auth):
+        with db.session() as session:
+            config = model_settings(session)
+            status = worker_status(session)
+        return {**status, "model": model_connection.status(config)}
 
     @app.put("/api/settings")
     def save_settings(body: ModelConfig, auth: Auth):
@@ -348,6 +383,11 @@ def create_app(database=None):
     def documents(auth: Auth):
         with db.session() as session:
             all_pages = list(session.scalars(select(Page)))
+            active_jobs = {
+                job.document_id: job
+                for job in session.scalars(select(Job).where(Job.status.in_(["queued", "running"])))
+            }
+            config_revision = model_settings(session).revision
             counts = {}
             for page in all_pages:
                 counts[page.sha256] = counts.get(page.sha256, 0) + 1
@@ -359,6 +399,11 @@ def create_app(database=None):
                     "created": d.created,
                     "error": d.error,
                     "ignored": d.ignored,
+                    "analysis": {
+                        "attempts": active_jobs[d.id].attempts,
+                        "retry_at": active_jobs[d.id].available if d.status == "queued" else None,
+                        "uses_current_settings": active_jobs[d.id].config.get("revision") == config_revision,
+                    } if d.id in active_jobs else None,
                     "pages": [serialize_page(p) for p in all_pages if p.document_id == d.id],
                     "repeated_content": any(counts[p.sha256] > 1 for p in all_pages if p.document_id == d.id),
                 }

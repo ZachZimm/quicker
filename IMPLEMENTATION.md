@@ -9,7 +9,7 @@ the September 17 target-machine validation and deployment instructions.
 - FastAPI application, SQLite persistence, packaged Alembic migration, and
   separate extraction worker with durable claims, bounded retries, settings
   snapshots, failure history, and protection against expired workers publishing.
-- One shared login with hashed passwords, expiring sessions, CSRF checks,
+- One shared login with hashed passwords, revocable persistent sessions, CSRF checks,
   rate-limited login, and authenticated original/preview access.
 - Configurable model protocol, HTTP/HTTPS transport, host, port, base path, model,
   optional API key, timeout, image size, output limit, and extraction concurrency. Chat

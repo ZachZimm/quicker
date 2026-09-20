@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from sqlalchemy import and_, or_, select
 
+from .analysis_status import heartbeat
 from .catalog import catalog
 from .contracts import ModelConfig
 from .db import Candidate, Database, Document, ExtractionAttempt, Job
@@ -91,18 +92,23 @@ def main():
     if args.once:
         process_one(db)
         return
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        futures = set()
-        while True:
-            with db.session() as session:
-                concurrency = model_settings(session).concurrency
-            for future in list(futures):
-                if future.done():
-                    future.result()
-                    futures.remove(future)
-            while len(futures) < concurrency:
-                futures.add(pool.submit(process_one, db))
-            time.sleep(2)
+    worker_id = str(uuid4())
+    try:
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            futures = set()
+            while True:
+                with db.session() as session:
+                    concurrency = model_settings(session).concurrency
+                for future in list(futures):
+                    if future.done():
+                        future.result()
+                        futures.remove(future)
+                heartbeat(db, worker_id, len(futures), concurrency)
+                while len(futures) < concurrency:
+                    futures.add(pool.submit(process_one, db))
+                time.sleep(2)
+    finally:
+        heartbeat(db, worker_id, 0, 0)
 
 
 if __name__ == "__main__":

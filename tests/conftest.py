@@ -75,7 +75,14 @@ def photo():
 
 
 @pytest.fixture
-def browser_url(db):
+def browser_url(db, monkeypatch):
+    # Browser acceptance tests must not depend on a developer's live model server.
+    from quicker.analysis_status import ModelConnection
+
+    monkeypatch.setattr(ModelConnection, "status", lambda self, config: {
+        "state": "unreachable", "message": "Cannot reach the model server.",
+        "checked_at": int(time.time()), "name": config.model,
+    })
     if not Path("web/dist/index.html").exists():
         pytest.skip("Build the web application before browser tests")
     sock = socket.socket()

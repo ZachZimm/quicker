@@ -52,6 +52,18 @@ If a shared account was provisioned during development, its generated credential
 are in the ignored `.local/first-login.txt`. `quicker setup` resets the shared
 password and invalidates browser sessions. It does not delete documents.
 
+## Staying signed in
+
+Browser logins persist across browser and server restarts, with no server-side
+session timeout. Quicker renews its 400-day HttpOnly cookie on successful
+authenticated requests. Regular use keeps the login active. Clearing browser
+cookies, private browsing, or browser retention limits can still require a login.
+
+Log out to revoke that browser's session. Running `quicker setup` to reset the
+shared password revokes every browser session. Existing unexpired logins upgrade
+automatically on their next authenticated request; expired logins require one new
+sign-in. Restart the server after installing this change.
+
 ## Use the workspace
 
 1. Import an all-accounts QIF export with Transactions, Account List, Category List,
@@ -62,16 +74,31 @@ password and invalidates browser sessions. It does not delete documents.
    a property identity; units remain separate labels. Exact Quicken account names
    are retained. R&K business defaults use payment year; auto insurance uses the
    exact `R&K Properties` account. All assignments remain editable.
-3. Upload JPEG, PNG, or HEIC images. Choose whether files are separate documents
+3. Choose **Upload & analyze** for JPEG, PNG, or HEIC images. Analysis starts
+   automatically and detects the document type. Choose whether files are separate documents
    or ordered pages of one document. Originals are retained; smaller JPEG copies
    are used for extraction and preview. Limits are 20 images, 50 MB per image,
    and 150 MB per upload batch.
-4. Keep the worker running. It records attempts, retries failures up to three
-   times, and exposes failed documents with a manual retry using current settings.
+4. Keep the worker running. Documents show **Waiting for analysis**, **Analyzing**,
+   or the completed/failed result. The analysis panel shows worker availability,
+   queue counts, and the saved model connection's status. Worker heartbeats expire
+   after 15 seconds; the model-server check is cached for 30 seconds and sends no
+   images or inference requests. The vision check in Settings also tests image support.
+   Restart both the server and worker after installing this status-reporting change.
+   The worker records attempts and automatically retries failures up to three
+   attempts. **Analyze again** retries a completed or failed document using current settings.
+   Waiting documents show retry timing, worker availability, or a busy queue.
    A job uses the model settings revision saved when it was queued. Group only
    as many pages as fit the configured model's context. A truncated response is
    rejected in full and cannot create partial transactions.
-5. Use the review table and source viewer to complete fields. Dates are required.
+5. Edit fields directly in the review register. Click a cell or press Enter/F2
+   to edit, Tab to move between fields, and Escape to cancel a cell edit. Enter
+   saves the row; leaving a row saves automatically. Property, unit, category,
+   account, and expense tag offer searchable choices. Enable **Tag and memo**
+   for optional columns. **Details** opens the source page, full form, duplicate
+   matches, and change history. Dates are required before approval.
+   Failed saves keep the draft; **Save row** retries and **Discard edits / reload**
+   fetches the current saved transaction. Background refreshes preserve drafts.
    Card purchases use purchase dates, refunds are positive, and payments, fees,
    interest, and visibly crossed-out items are ignored. Card properties are
    left for manual review except the business rules below. Generic insurer names
@@ -86,10 +113,13 @@ password and invalidates browser sessions. It does not delete documents.
    Matches use property and unit evidence, allow nearby payment dates, and can
    flag a payment within a printed service period when the bill has no date.
    New duplicate evidence invalidates affected approvals and open edits. Removing
-   a row preserves it; restoring returns it to review. Editing an approved row
+   a row preserves it; use **Remove** directly on its table row, then **Restore**
+   in the Removed tab if needed. Removal discards any unsaved inline edits.
+   Restoring returns it to review. Editing an approved row
    requires approval again.
-7. Open a source document to add a missed transaction or retry extraction. A new
-   extraction produces a comparison when rows already exist. Select missing rows
+7. Open a source document to add a missed transaction or choose **Analyze again**.
+   Reanalysis produces a comparison when rows already exist. Use **Compare analysis**
+   and select missing rows
    to add; saved edits, approvals, existing-transaction links and removed rows
    remain intact. New rows require review. Repeat requests cannot add them twice.
 8. Pair the Windows companion to populate its archive, including phone uploads.
@@ -174,7 +204,7 @@ substituted.
 ## Rental units and shared expenses
 
 Bell Street has one annual register for both rentals. Select `1008 Bell` or
-`2 Bell` in the review dialog's Unit field for a unit-specific expense, or
+`2 Bell` in the register's Unit column or the detail form for a unit-specific expense, or
 `Whole property` for a shared expense. `Unresolved` means the available evidence
 does not identify a rental; it remains visible in the table and does not prevent
 approval. The unit never changes the payment-year account or divides the amount.

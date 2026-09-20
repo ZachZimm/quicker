@@ -120,6 +120,11 @@ export type DocumentRecord = {
   pages: Page[];
   ignored: { source: string; reason: string; page: number }[];
   repeated_content: boolean;
+  analysis?: {
+    attempts: number;
+    retry_at: number | null;
+    uses_current_settings: boolean;
+  } | null;
 };
 export type Fields = {
   payee: string | null;

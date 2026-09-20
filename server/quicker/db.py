@@ -32,6 +32,8 @@ class LoginAttempt(Base):
 
 
 class BrowserSession(Base):
+    """A revocable browser login; expires=0 means no server-side time limit."""
+
     __tablename__ = "sessions"
     token_hash: Mapped[str] = mapped_column(String, primary_key=True)
     csrf: Mapped[str] = mapped_column(String)
