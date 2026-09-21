@@ -103,7 +103,7 @@ suite and offscreen Qt check do not establish Windows compatibility.
 - A crash after Quicken accepts a transaction but before acknowledgement causes
   reconciliation against a fresh export, never blind resubmission.
 - Post-entry verification checks account, amount, date, payee, category and tags.
-  Include both Bell rentals, shared property expenses and the R&K exception.
+  Include both Example rentals, shared property expenses and the R&K exception.
 - Manual refresh works without entering anything. Background refresh defers when
   the desktop is unavailable or in use, with visible status.
 

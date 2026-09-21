@@ -132,7 +132,7 @@ Use the existing disconnected test QDF, never the production file for probes.
 - Creation imports a QIF containing only `!Account`, the exact name and `TBank`.
   Only Account List is checked in Quicken's QIF Import dialog. No transaction,
   opening balance, category, memorized payee or online-service data is supplied.
-- Created `2029 Bell St.` in the disconnected test QDF. A fresh full export proved
+- Created `2029 Example St.` in the disconnected test QDF. A fresh full export proved
   exactly one Bank account was added and all transaction history was unchanged.
   Quicken's Account Details confirmed Checking, no institution or account number,
   no transaction-download setup and no online bill pay. Repeated processing did

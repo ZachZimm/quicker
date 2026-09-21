@@ -72,8 +72,7 @@ Recurring business expenses use preferred 2026 categories and year-specific R&K
 accounts, with the existing auto insurance exception. Rule details are in README.md.
 
 For bills and invoices, a model-read service/job address or unambiguous utility
-customer address can automatically assign a verified property. The initial
-verified address is 1008 Bell St, Reno, NV, mapped to Bell St. Payment-year account
+customer address can automatically assign a verified property. Verified identities are configured in the ignored private property profile. Payment-year account
 routing still waits for a payment date. Manual review can change the assignment.
 
 ## Authoritative Quicken synchronization

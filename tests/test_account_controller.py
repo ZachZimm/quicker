@@ -130,7 +130,7 @@ def test_existing_account_and_conflicts(auth, device, tmp_path):
     assert adapter.submissions == 0
 
 
-@pytest.mark.parametrize("record", [b"N2028 BELL ST.\nTBank", b"N2028 Bell St.\nTCash"])
+@pytest.mark.parametrize("record", [b"N2028 EXAMPLE ST.\nTBank", b"N2028 Example St.\nTCash"])
 def test_conflict_stops_before_import(auth, device, tmp_path, record):
     request, _api, adapter, ops = setup(auth, device, tmp_path)
     adapter.content += b"!Account\n" + record + b"\n^\n"
@@ -168,8 +168,8 @@ def test_account_format_rejects_unsafe_names(name):
 
 
 def test_account_format_contains_no_transactions():
-    assert render_account({"name": "2028 Bell;One half & café", "account_type": "Bank"}) == (
-        b"!Account\r\nN2028 Bell;One half & caf\xe9\r\nTBank\r\n^\r\n"
+    assert render_account({"name": "2028 Example;One half & café", "account_type": "Bank"}) == (
+        b"!Account\r\nN2028 Example;One half & caf\xe9\r\nTBank\r\n^\r\n"
     )
     with pytest.raises(ValueError, match="Only Bank"):
         render_account({"name": "New", "account_type": "Cash"})

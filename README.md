@@ -35,8 +35,12 @@ Open `http://localhost:8999` on this computer, or use the Linux machine's LAN
 address from another device. The development server uses HTTP. For the planned
 HTTPS deployment, use the reverse-proxy configuration below.
 
-Settings default to `http://localhost:1234/v1`, protocol `chat-completions`, and
-model `qwen3.8-27b@q4_k_m`, with no API key. Protocol, transport, host, port, base
+New installations default to the local Bonsai service on port 9090, base path
+`/v1`, protocol `chat-completions`, and model `bonsai-2-27b`. Set the private
+server host and API key in Settings. Existing saved settings are retained.
+The default response budget is 32,768 tokens, configurable up to 65,536; the
+model context must also fit the input images, prompt, and any reasoning.
+The tested Bonsai setup uses a 65,536-token context and its vision projector. Protocol, transport, host, port, base
 path, model, optional key, timeout, concurrency, output limit, and image size are editable in
 Settings. A blank key on a new connection sends no Authorization header; the
 explicit Remove key checkbox clears an existing key. The vision check uses a
@@ -185,18 +189,35 @@ and Responses remain available for other compatible endpoints. The output limit
 bounds generation but does not enlarge the model's loaded context. Truncated or
 invalid results never create partial rows.
 
+## Private property configuration
+
+Real property addresses, parcel identifiers, unit tags, and utility-service
+identifiers belong in `data/private-profile.json`, which Git ignores. Set
+`QUICKER_PROFILE_PATH` to use another private location. This JSON object contains
+`properties`, `parcels`, `unit_mappings`, and the installation's frozen
+`legacy_units` migration map. The synthetic fixture in `tests/fixtures` illustrates
+the structure; it is not production data. Restart server and worker after editing
+this configuration. Without a profile, automatic address/parcel/unit matching is
+unavailable; imported account routes still work.
+
+The CLI backup includes this profile as `private-profile.json`. Restore it alongside
+the database and originals, and keep it private. Model hosts, credentials, and
+client server URLs also belong in local settings, not source or documentation.
+Tracked examples use fictional property identities and generic network addresses.
+Removing values from current files does not remove them from earlier Git commits.
+
 ## Address-based property assignment
 
 Bills and invoices can assign a property from a model-read service or job address.
 For utility bills, the customer address is also eligible when no conflicting
 service address is shown. The address must match a verified entry in
-`server/quicker/profile.py`; house numbers are never fuzzy-matched. Street
+the private property profile; house numbers are never fuzzy-matched. Street
 abbreviations and unit suffixes are normalized, while conflicting cities or
 states prevent a match. Mailing and supplier addresses, credit card statement
 addresses, and tax stubs do not trigger this rule.
 
-`1008 Bell St, Reno, NV` is verified as **Bell St.** The original address is shown
-in review. Further verified addresses can be added to the same property directory.
+The original address remains visible in the private review workspace. Further
+verified addresses can be added to the local property directory.
 Explicit business rules take precedence and conflicting evidence is flagged.
 Assignments remain editable. The destination account defaults to the property's
 highest mapped year, independently of the transaction date. A payment date is
@@ -231,15 +252,15 @@ contract and validation details are in [WINDOWS_ACCOUNT_CREATION.md](WINDOWS_ACC
 
 ## Rental units and shared expenses
 
-Bell Street has one annual register for both rentals. Select `1008 Bell` or
-`2 Bell` in the register's Unit column or the detail form for a unit-specific expense, or
+Multiple rentals can share one annual property register. Select the appropriate
+Quicken unit tag in the Unit column or detail form for a unit-specific expense, or
 `Whole property` for a shared expense. `Unresolved` means the available evidence
 does not identify a rental; it remains visible in the table and does not prevent
 approval. The unit never changes the property account or divides the amount.
 
 Unit selection supplies the exact existing Quicken unit tag. The separate expense
 tag, such as `Utilities`, is retained. Review displays both intended Quicken tags;
-Quicken entry remains unavailable. Changing properties clears the unit assignment.
+Changing properties clears the unit assignment.
 Unit selections must belong to the chosen property, and their tags must exist in
 the imported catalog before approval. Manual selections take precedence over
 automatic suggestions.
@@ -249,12 +270,10 @@ address alone does not select a rental. The full printed address, including any
 unit suffix, and printed utility account number are retained for review. Customer,
 premises and meter numbers are not substituted for the utility account number.
 
-`VERIFIED_UNIT_MAPPINGS` in `server/quicker/profile.py` records the WM service
-customer IDs for the Holman and West Sixth rentals. The Bell IDs identify two
-physical locations, `1008 Bell St` and `1008 Bell St #1/2`, but their relationship
-to the Quicken unit tags remains unresolved. The available NV Energy bill also
-does not establish a rental unit. Add a mapping only when bills or other records
-establish the identity. Each mapping is
+The private profile's `unit_mappings` records verified utility customer IDs and
+unit addresses. A service location and a Quicken rental label may remain
+unresolved until evidence establishes their relationship. Add a mapping only
+when bills or other records establish the identity. Each mapping is
 a dictionary with `property`, `unit`, `merchant`, a readable `evidence` explanation,
 and one or more of `utility_account`, `service_customer_id`, or `address`. An address has `street`, `city` and `state`.
 

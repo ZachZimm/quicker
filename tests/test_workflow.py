@@ -33,7 +33,7 @@ class InvoiceAdapter:
                         "date": "2026-07-19",
                         "date_basis": "invoice",
                         "source": "Printed total",
-                        "property": "Bell St.",
+                        "property": "Example St.",
                     }
                 ],
             }
@@ -134,17 +134,17 @@ def test_review_required_date_override_and_stale_edit(auth, db, photo):
     response = action(auth, row, "save", edit)
     assert response.status_code == 200, response.text
     saved = response.json()[0]
-    assert saved["data"]["account"] == "2027 Bell St."
+    assert saved["data"]["account"] == "2027 Example St."
     assert action(auth, row, "save", edit).status_code == 409
     approved = action(auth, saved, "approve").json()[0]
     assert approved["status"] == "approved"
     edited = action(auth, approved, "save", {**fields(approved), "date": "2027-01-02"}).json()[0]
     assert edited["status"] == "review"
-    assert edited["data"]["account"] == "2027 Bell St."
+    assert edited["data"]["account"] == "2027 Example St."
     override = action(
-        auth, edited, "save", {**fields(edited), "account": "2026 Bell St.", "account_override": True}
+        auth, edited, "save", {**fields(edited), "account": "2026 Example St.", "account_override": True}
     ).json()[0]
-    assert override["data"]["account"] == "2026 Bell St."
+    assert override["data"]["account"] == "2026 Example St."
     assert len(auth.get("/api/transactions/" + row["id"] + "/history").json()) == 5
 
 
@@ -176,7 +176,7 @@ def test_card_and_tax_business_rules(auth, db, photo):
                             "amount": "12.34",
                             "date": "2026-08-10",
                             "date_basis": "purchase",
-                            "property": "Bell St.",
+                            "property": "Example St.",
                             "tag": "Property",
                         }
                         for kind in ["purchase", "refund", "payment", "fee", "interest"]
@@ -205,7 +205,7 @@ def test_card_and_tax_business_rules(auth, db, photo):
                             "date": "2026-08-10",
                             "date_basis": "payment",
                             "paid": True,
-                            "parcel": "03127109",
+                            "parcel": "90000001",
                         },
                         {
                             "kind": "tax",
@@ -222,7 +222,7 @@ def test_card_and_tax_business_rules(auth, db, photo):
     process_one(db, TaxAdapter)
     tax = [r for r in auth.get("/api/transactions").json() if r["data"]["kind"] == "tax"]
     assert len(tax) == 1
-    assert tax[0]["data"]["parcel"] == "03127109"
+    assert tax[0]["data"]["parcel"] == "90000001"
     assert tax[0]["data"]["date"] == "2026-08-10"
 
 
@@ -409,14 +409,14 @@ def test_auto_insurance_defaults_use_exact_account_and_allow_review_edits(auth, 
         "save",
         {
             **fields(saved),
-            "property": "Bell St.",
-            "account": "2027 Bell St.",
+            "property": "Example St.",
+            "account": "2027 Example St.",
             "category": "Repairs",
         },
     ).json()[0]
     assert edited["status"] == "review"
-    assert edited["data"]["property"] == "Bell St."
-    assert edited["data"]["account"] == "2027 Bell St."
+    assert edited["data"]["property"] == "Example St."
+    assert edited["data"]["account"] == "2027 Example St."
     assert edited["data"]["category"] == "Repairs"
     assert action(auth, edited, "approve").status_code == 200
 

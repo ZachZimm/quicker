@@ -154,7 +154,7 @@ Inspected local reference files:
 - `/home/zach/gold/projects/quicker/quicker-screenshot 2026-09-06 011133.png`
 - Four source document PNGs in the same directory.
 
-The original export contained only 41 Bell Street transactions. The later
+The original export contained only 41 Example Street transactions. The later
 `quicker-full-reference.QIF` contains 36 account names, 161 categories, 51 tags,
 183 memorized payees and 1,262 transactions across 35 registers, dated January
 2024 through September 2026. Of these, 264 transactions belong to four R&K
@@ -162,14 +162,14 @@ accounts. The remaining Bill account has no exported register history.
 All 287 blank-payee entries are retained in the reference catalog.
 
 Accounts appear to organize records by property and year, including
-`2026 Bell St.`, `2026 Holman Way`, and `2026 Viento Way`. R&K Properties has
+`2026 Example St.`, `2026 Sample Way`, and `2026 Test Way`. R&K Properties has
 several accounts, including `R&K Properties 2026`. Payment/transaction year will
 determine the default account, with an override in review. Most listed accounts
 are exported as `Bank`; one is `Bill`.
 
-Tags serve several purposes. Examples include `1008 Bell`, `2 Bell`, `Utilities`,
+Tags serve several purposes. Examples include `4100 Example`, `2 Example`, `Utilities`,
 `Water`, and `R&K`. Category and tag are separate from the destination account.
-For example, the Bell account contains a Washoe County Treasurer expense using
+For example, the Example account contains a Washoe County Treasurer expense using
 category `Property Tax` and tag `Utilities`.
 
 Existing categories and memorized payees contain alternative assignments for
@@ -384,7 +384,7 @@ that the installation accepts an import or preserves its fields.
 The user selected year-specific R&K destinations except for auto insurance, and
 specific 2026 categories. The implemented choices and match conditions are listed
 in README.md. Known property aliases share stable identities and exact yearly
-account mappings; Bell unit labels remain distinct from the Bell register.
+account mappings; Example unit labels remain distinct from the Example register.
 Reference import preserves dates, signed amounts and original QIF records, and
 reports per-account coverage. Historical duplicate matches require review and
 acknowledgement; reference imports can invalidate affected approvals. Merchant
@@ -393,7 +393,6 @@ Interactive rule creation and a general explanation system remain deferred.
 
 Bills and invoices now extract a structured property address. A verified service,
 job or utility-customer address can set the property before review, with exact
-house-number matching and normalized street abbreviations. The initial verified
-address is 1008 Bell St, Reno, NV, mapped to Bell St. This does not supply a payment
+house-number matching and normalized street abbreviations. Verified identities are configured in the ignored private property profile. This does not supply a payment
 date or override the explicit business rules. Card mailing addresses and tax
 parcel mappings remain outside this mechanism.

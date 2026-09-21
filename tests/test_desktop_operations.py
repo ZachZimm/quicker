@@ -48,10 +48,10 @@ def candidate(db, **changes):
                     "amount_minor": -123,
                     "date": "2026-09-17",
                     "currency": "USD",
-                    "account": "2026 Bell St.",
+                    "account": "2026 Example St.",
                     "category": "Utilities",
                     "tag": "Water",
-                    "property": "Bell St.",
+                    "property": "Example St.",
                     "unit": "whole_property",
                     "memo": "Test",
                     **changes,
@@ -183,7 +183,7 @@ def test_post_export_requires_one_exact_new_marker(auth, db, device, change):
     if change == "duplicate":
         qif *= 2
     if change == "wrong_account":
-        qif = qif.replace("2026 Bell St.", "2027 Bell St.")
+        qif = qif.replace("2026 Example St.", "2027 Example St.")
     post, _ = exported(auth, device, run, owner, QIF + qif, "post")
     result = auth.post(
         f"/api/device/operations/{run['id']}/reconcile",
@@ -216,7 +216,7 @@ def test_reference_manual_addition_revokes_approval_and_no_new_approvals_sneak_i
     candidate(db, payee="Later approval")
     qif = (
         QIF
-        + "!Account\nN2026 Bell St.\nTBank\n^\n!Type:Bank\nD9/17'26\nT-1.23\nPDesktop Test\nLUtilities/Water\n^\n"
+        + "!Account\nN2026 Example St.\nTBank\n^\n!Type:Bank\nD9/17'26\nT-1.23\nPDesktop Test\nLUtilities/Water\n^\n"
     )
     event, _ = exported(auth, device, run, owner, qif)
     run = claim(auth, device, run, owner, event)
@@ -233,7 +233,7 @@ def test_reduced_or_partial_export_cannot_claim(auth, db, device):
         device,
         run,
         owner,
-        QIF + "!Account\nN2026 Bell St.\nTBank\n^\n!Type:Bank\nD1/1'26\nT-2\nPOther\n^\n",
+        QIF + "!Account\nN2026 Example St.\nTBank\n^\n!Type:Bank\nD1/1'26\nT-2\nPOther\n^\n",
     )
     held, _ = exported(auth, device, run, owner)
     assert held["status"] == "needs_review"
@@ -319,7 +319,7 @@ def test_qif_input_validation():
         "account_type": "Bank",
         "tags": [],
         "data": {
-            "account": "2026 Bell St.",
+            "account": "2026 Example St.",
             "payee": "Test",
             "date": "2026-09-17",
             "amount_minor": -1,

@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 from quicker.app import create_app
 from quicker.cli import main
 from quicker.db import Database, Document
+from quicker.private_profile import profile_path
 from sqlalchemy import select
 from test_workflow import upload
 
@@ -17,6 +18,8 @@ def test_backup_restores_database_and_originals(auth, db, photo, tmp_path, monke
     monkeypatch.setenv("QUICKER_DATA_DIR", str(db.directory))
     monkeypatch.setattr(sys, "argv", ["quicker", "backup", str(target)])
     main()
+    assert (target / "private-profile.json").read_bytes() == profile_path().read_bytes()
+    assert (target / "private-profile.json").stat().st_mode & 0o777 == 0o600
     restored = Database(target)
     restored.migrate()
     with restored.session() as session:

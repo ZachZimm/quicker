@@ -10,7 +10,7 @@ from test_workflow import action, fields, ready
 device = account_device
 
 
-def request_account(auth, name="2028 Bell St.", **changes):
+def request_account(auth, name="2028 Example St.", **changes):
     return auth.post(
         "/api/account-requests",
         json={
@@ -38,14 +38,14 @@ def fresh(auth, device, content=QIF):
 def test_latest_account_without_date_and_with_older_date(auth, db, photo):
     row = ready(auth, db, photo)
     assert row["data"]["date"] is None
-    assert row["data"]["account"] == "2027 Bell St."
+    assert row["data"]["account"] == "2027 Example St."
     row = action(auth, row, "save", {**fields(row), "date": "2020-01-01"}).json()[0]
-    assert row["data"]["account"] == "2027 Bell St."
+    assert row["data"]["account"] == "2027 Example St."
     row = action(
-        auth, row, "save", {**fields(row), "account": "2026 Bell St.", "account_override": True}
+        auth, row, "save", {**fields(row), "account": "2026 Example St.", "account_override": True}
     ).json()[0]
     row = action(auth, row, "save", {**fields(row), "date": None}).json()[0]
-    assert row["data"]["account"] == "2026 Bell St."
+    assert row["data"]["account"] == "2026 Example St."
 
 
 def test_new_account_import_reroutes_automatic_approval_with_new_revision(auth, db, photo):
@@ -54,9 +54,9 @@ def test_new_account_import_reroutes_automatic_approval_with_new_revision(auth, 
     row = ready(auth, db, photo)
     approved = action(auth, row, "approve", {**fields(row), "date": "2026-08-10"}).json()[0]
     with db.write() as session:
-        import_catalog(session, QIF + "!Account\nN2028 Bell St.\nTBank\n^\n")
+        import_catalog(session, QIF + "!Account\nN2028 Example St.\nTBank\n^\n")
     rerouted = auth.get("/api/transactions").json()[0]
-    assert rerouted["data"]["account"] == "2028 Bell St."
+    assert rerouted["data"]["account"] == "2028 Example St."
     assert rerouted["status"] == "review"
     assert rerouted["revision"] == approved["revision"] + 1
     assert action(auth, approved, "approve").status_code == 409
@@ -77,11 +77,11 @@ def test_default_migration_preserves_overrides_and_entered_rows(db):
     db.migrate()
     with db.session() as session:
         auto_row = session.get(Candidate, auto)
-        assert auto_row.data["account"] == "2027 Bell St."
+        assert auto_row.data["account"] == "2027 Example St."
         assert auto_row.status == "review" and auto_row.revision == 2
         for row_id in (override, entered):
             row = session.get(Candidate, row_id)
-            assert row.data["account"] == "2026 Bell St."
+            assert row.data["account"] == "2026 Example St."
             assert row.revision == 1
         assert session.get(Candidate, entered).status == "entered"
         assert session.get(Candidate, override).status == "approved"
@@ -90,7 +90,7 @@ def test_default_migration_preserves_overrides_and_entered_rows(db):
 
 def test_account_request_requires_confirmation_target_and_valid_name(auth, device):
     assert request_account(auth, confirmed=False).status_code == 422
-    assert request_account(auth, "2026 bELL st.").status_code == 409
+    assert request_account(auth, "2026 Example st.").status_code == 409
     for name in (" ", "Bad\nAccount", "[Transfer]", "Not QIF 😀", "x" * 40):
         assert request_account(auth, name).status_code == 422
     request_id = str(uuid4())
@@ -145,14 +145,14 @@ def test_creation_proof_capability_owner_and_no_repeat_attempt(auth, device, db,
         auth.post(base + "/complete", headers=device, json={"owner": owner, "event_id": missing}).status_code
         == 409
     )
-    wrong_type = fresh(auth, device, QIF + "!Account\nN2028 Bell St.\nTCash\n^\n")
+    wrong_type = fresh(auth, device, QIF + "!Account\nN2028 Example St.\nTCash\n^\n")
     assert (
         auth.post(
             base + "/complete", headers=device, json={"owner": owner, "event_id": wrong_type}
         ).status_code
         == 409
     )
-    proof = fresh(auth, device, QIF + "!Account\nN2028 Bell St.\nTBank\n^\n")
+    proof = fresh(auth, device, QIF + "!Account\nN2028 Example St.\nTBank\n^\n")
     result = auth.post(base + "/complete", headers=device, json={"owner": owner, "event_id": proof})
     assert result.status_code == 200, result.text
     assert result.json()["status"] == "complete"
@@ -170,7 +170,7 @@ def test_request_already_present_in_fresh_export_is_not_created(auth, device):
         headers=device,
         json={"protocol": 1, "file_identity": FILE, "account_creation": 1},
     )
-    proof = fresh(auth, device, QIF + "!Account\nN2028 Bell St.\nTBank\n^\n")
+    proof = fresh(auth, device, QIF + "!Account\nN2028 Example St.\nTBank\n^\n")
     base = f"/api/device/account-requests/{request['id']}"
     owner = str(uuid4())
     assert (
@@ -219,7 +219,7 @@ def test_pending_account_cannot_be_approved(auth, device, db, photo):
     row = ready(auth, db, photo)
     request_account(auth)
     response = action(
-        auth, row, "save", {**fields(row), "account": "2028 Bell St.", "account_override": True}
+        auth, row, "save", {**fields(row), "account": "2028 Example St.", "account_override": True}
     )
     assert response.status_code == 200
     row = response.json()[0]
@@ -234,15 +234,15 @@ def test_register_searchable_choices_and_confirmed_account_creation(browser_url,
         page = browser.new_page(viewport={"width": 1600, "height": 1000})
         login(page, browser_url)
         row = page.locator(f'tr[data-transaction-id="{candidate["id"]}"]')
-        expect(cell(row, "account")).to_contain_text("2027 Bell St.")
+        expect(cell(row, "account")).to_contain_text("2027 Example St.")
         cell(row, "account").get_by_role("button").click()
         options = page.get_by_role("listbox", name="Edit Account options")
-        expect(options.get_by_role("option", name="2026 Bell St.", exact=True)).to_be_visible()
-        page.get_by_role("combobox", name="Edit Account").fill("bELL")
-        expect(options.get_by_role("option", name="2026 Bell St.", exact=True)).to_be_visible()
+        expect(options.get_by_role("option", name="2026 Example St.", exact=True)).to_be_visible()
+        page.get_by_role("combobox", name="Edit Account").fill("Example")
+        expect(options.get_by_role("option", name="2026 Example St.", exact=True)).to_be_visible()
         expect(options.get_by_role("option", name="R&K Properties 2026", exact=True)).to_have_count(0)
-        options.get_by_role("option", name="2026 Bell St.", exact=True).click()
-        expect(cell(row, "account")).to_contain_text("2026 Bell St.")
+        options.get_by_role("option", name="2026 Example St.", exact=True).click()
+        expect(cell(row, "account")).to_contain_text("2026 Example St.")
         edit(row, "account", "x" * 40)
         page.keyboard.press("Enter")
         too_long = page.get_by_role("dialog", name="Create Quicken account")
@@ -251,7 +251,7 @@ def test_register_searchable_choices_and_confirmed_account_creation(browser_url,
         too_long.get_by_role("button", name="Close account creation").click()
         edit(row, "date", "2024-01-01")
         page.keyboard.press("Enter")
-        expect(cell(row, "account")).to_contain_text("2026 Bell St.")
+        expect(cell(row, "account")).to_contain_text("2026 Example St.")
         edit(row, "account", "2028 New Rental")
         page.keyboard.press("Enter")
         dialog = page.get_by_role("dialog", name="Create Quicken account")
@@ -261,7 +261,7 @@ def test_register_searchable_choices_and_confirmed_account_creation(browser_url,
         assert auth.get("/api/catalog").json()["account_requests"] == []
         dialog.get_by_role("button", name="Close account creation", exact=True).click()
         expect(dialog).to_have_count(0)
-        expect(cell(row, "account")).to_contain_text("2026 Bell St.")
+        expect(cell(row, "account")).to_contain_text("2026 Example St.")
         edit(row, "account", "2028 New Rental")
         page.keyboard.press("Enter")
         dialog.get_by_role("button", name="Confirm account creation", exact=True).click()

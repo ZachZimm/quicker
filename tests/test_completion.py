@@ -14,17 +14,17 @@ from test_reference import HISTORY
 from test_workflow import InvoiceAdapter, action, fields, ready
 
 
-def export(account="2026 Holman Way", amount="251.86", day="2/1'26", tag="", payee="City of Sparks"):
+def export(account="2026 Sample Way", amount="251.86", day="2/1'26", tag="", payee="City of Sparks"):
     return f"!Account\nN{account}\nTBank\n^\n!Type:Bank\nD{day}\nT-{amount}\nP{payee}\nLSewer{('/' + tag) if tag else ''}\n^\n!Type:Cat\nNSewer\nE\n^\n"
 
 
 def test_history_match_scopes_property_unit_and_service_period():
-    ref = parse_qif(export() + export(account="2026 Grose Lane"))
+    ref = parse_qif(export() + export(account="2026 Demo Lane"))
     data = {
         "payee": "City of Sparks",
         "amount_minor": -25186,
         "date": None,
-        "property": "Holman Way",
+        "property": "Sample Way",
         "service_period": "01/01/2026 - 03/31/2026",
     }
     matches = historical_matches(ref, data)
@@ -32,10 +32,10 @@ def test_history_match_scopes_property_unit_and_service_period():
     assert data["date"] is None
     assert not historical_matches(ref, {**data, "service_period": "unknown"})
     ref = parse_qif(
-        export(account="2026 Bell St.", tag="1008 Bell") + export(account="2026 Bell St.", tag="2 Bell")
+        export(account="2026 Example St.", tag="4100 Example") + export(account="2026 Example St.", tag="2 Example")
     )
-    data.update(property="Bell St.", unit="2 Bell", date="2026-02-03")
-    assert [r["tag"] for r in historical_matches(ref, data)] == ["2 Bell"]
+    data.update(property="Example St.", unit="2 Example", date="2026-02-03")
+    assert [r["tag"] for r in historical_matches(ref, data)] == ["2 Example"]
     assert historical_matches(ref, data)[0]["match_confidence"] == "near_date"
     assert not historical_matches(ref, {**data, "amount_minor": 25186})
 
@@ -72,7 +72,7 @@ def test_exports_keep_exact_backups_hold_partial_and_stale_versions(auth, db):
 
 def test_existing_link_blocks_approval_and_reopens_when_export_loses_match(auth, db, photo):
     row = ready(auth, db, photo)
-    ref = export(account="2026 Bell St.", amount="214.55", payee="Example Energy")
+    ref = export(account="2026 Example St.", amount="214.55", payee="Example Energy")
     store_export(db, ref.encode(), "reference.QIF")
     with db.write() as session:
         candidate = session.get(Candidate, row["id"])

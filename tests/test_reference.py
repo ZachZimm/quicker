@@ -73,39 +73,39 @@ def test_full_records_coverage_and_memorized_payees_have_no_inherited_account():
 
 def test_property_aliases_preserve_exact_accounts_and_manual_override(db):
     qif = """!Account
-N2025 G Street
+N2025 Fiction Street
 TBank
 ^
-N2026 1810 G Street
+N2026 4200 Fiction Street
 TBank
 ^
-N2024 - West Sixth Street
+N2024 - West Example Street
 TBank
 ^
-N2026 West 6th Street
+N2026 West Example Street
 TBank
 ^
-N1008 Bell St.
+N1008 Example St.
 TBank
 ^
 """
     with db.write() as s:
         import_catalog(s, qif)
         routes = route_list(s)
-        g = [r for r in routes if r["property"] == "1810 G Street"]
-        assert {r["account"] for r in g} == {"2025 G Street", "2026 1810 G Street"}
-        west = [r for r in routes if r["property"] == "West 6th Street"]
+        g = [r for r in routes if r["property"] == "4200 Fiction Street"]
+        assert {r["account"] for r in g} == {"2025 Fiction Street", "2026 4200 Fiction Street"}
+        west = [r for r in routes if r["property"] == "West Example Street"]
         assert len(west) == 2
-        assert not any(r["account"] == "1008 Bell St." for r in routes)
+        assert not any(r["account"] == "4100 Example St." for r in routes)
         registry = property_directory(routes)
-        assert next(p for p in registry if p["name"] == "Bell St.")["units"] == ["1008 Bell", "2 Bell"]
-        assert canonical_property("Holman Way") != canonical_property("Holman Circle")
-        assert canonical_property("Bell;one half") == "Bell St."
+        assert next(p for p in registry if p["name"] == "Example St.")["units"] == ["4100 Example", "2 Example"]
+        assert canonical_property("Sample Way") != canonical_property("Sample Circle")
+        assert canonical_property("Example;one half") == "Example St."
         from quicker.db import Route
 
-        s.get(Route, ("1810 G Street", 2026)).account = "2025 G Street"
+        s.get(Route, ("4200 Fiction Street", 2026)).account = "2025 Fiction Street"
         import_catalog(s, qif)
-        assert s.get(Route, ("1810 G Street", 2026)).account == "2025 G Street"
+        assert s.get(Route, ("4200 Fiction Street", 2026)).account == "2025 Fiction Street"
 
 
 @pytest.mark.parametrize(
@@ -276,17 +276,17 @@ def test_history_category_does_not_establish_auto_coverage(auth, db, photo):
 def test_existing_mapping_resolves_alias_collision(db):
     from quicker.db import Route
 
-    qif = "!Account\nN2026 Bell St.\nTBank\n^\nN2026 Bell;One Half\nTBank\n^\n"
+    qif = "!Account\nN2026 Example St.\nTBank\n^\nN2026 Example;One Half\nTBank\n^\n"
     with db.write() as s:
         # Use a deliberate choice other than the first account in the export.
-        s.get(Route, ("Bell St.", 2026)).account = "2026 Bell;One Half"
+        s.get(Route, ("Example St.", 2026)).account = "2026 Example;One Half"
         ref = import_catalog(s, qif)
         assert len(ref["accounts"]) == 2
-        assert s.get(Route, ("Bell St.", 2026)).account == "2026 Bell;One Half"
+        assert s.get(Route, ("Example St.", 2026)).account == "2026 Example;One Half"
 
 
 def test_unmapped_alias_collision_still_requires_explicit_mapping(db):
-    qif = "!Account\nN2028 Bell St.\nTBank\n^\nN2028 Bell;One Half\nTBank\n^\n"
+    qif = "!Account\nN2028 Example St.\nTBank\n^\nN2028 Example;One Half\nTBank\n^\n"
     with pytest.raises(ValueError, match="explicit mapping"), db.write() as s:
         import_catalog(s, qif)
 

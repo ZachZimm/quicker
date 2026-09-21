@@ -9,15 +9,15 @@ class ModelConfig(BaseModel):
     protocol: Literal["chat-completions", "responses", "lm-studio"] = "chat-completions"
     scheme: Literal["http", "https"] = "http"
     host: str = "localhost"
-    port: int = Field(default=1234, ge=1, le=65535)
+    port: int = Field(default=9090, ge=1, le=65535)
     base_path: str = "/v1"
-    model: str = "qwen3.8-27b@q4_k_m"
+    model: str = "bonsai-2-27b"
     api_key: str | None = None
     timeout: int = Field(default=180, ge=10, le=600)
     concurrency: int = Field(default=1, ge=1, le=4)
     image_limit: int = Field(default=2000, ge=800, le=4000)
     reasoning: Literal["default", "off", "on"] = "default"
-    output_limit: int = Field(default=12000, ge=2000, le=32000)
+    output_limit: int = Field(default=32768, ge=2000, le=65536)
     revision: int = 1
 
     @field_validator("host")

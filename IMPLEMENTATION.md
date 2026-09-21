@@ -85,8 +85,8 @@ Earlier live extraction against the supplied photos and configured local model p
 
 | Sample | Result |
 | --- | --- |
-| Utility bill | One expense of $214.55; the local model read 1008 Bell St, Reno, NV, which assigned Bell St.; payment date and destination account remain blank for review; handwritten correction ignored. |
-| Tax installment sheet | Two paid installments, $144.16 and $137.66, both dated August 10, 2026; two unpaid stubs ignored; parcel `03127109` preserved as text. |
+| Utility bill | One expense of $214.55; the local model read a verified service address and assigned its property; payment date and destination account remain blank for review; handwritten correction ignored. |
+| Tax installment sheet | Two paid installments, $144.16 and $137.66, both dated August 10, 2026; two unpaid stubs ignored; parcel `90000001` preserved as text. |
 | Credit card statement | 14 purchases, totaling $4,178.73; the crossed-out $22.06 MHS Incline Village purchase and card payment excluded; the $422 auto insurance purchase uses the exact R&K Properties account; six additional unedited proposals now use R&K Properties 2026 with preferred categories. The remaining seven card properties are unassigned. |
 
 The initial verbose extraction prompt exhausted the model's available response
@@ -108,7 +108,7 @@ review rows. The configured endpoint failed to load the model and returned HTTP
 completion pass rechecked the restored model against these sources. Its matching
 results and failed attempts are retained alongside the original reviewed rows.
 The existing full 1,262-transaction QIF is now also stored as a downloadable,
-active export backup. Holman Way's undated $251.86 sewer bill matches an existing
+active export backup. Sample Way's undated $251.86 sewer bill matches an existing
 February 1, 2026 payment within its printed service period; the match is a review
 suggestion, and no document payment date was filled in.
 
@@ -132,7 +132,7 @@ other models can keep their default reasoning mode.
 
 The workflow in WINDOWS_HANDOFF.md is implemented. Native Quicken 27.1.69.29 tests
 used its disconnected copy/template feature and isolated server databases.
-Verified cases include both Bell rentals with expense/unit tags, whole-property
+Verified cases include both Example rentals with expense/unit tags, whole-property
 expenses, a positive R&K refund, and the exact R&K Properties account with
 Insurance (Business):Truck. The original data file was reopened after testing.
 See WINDOWS_STATUS.md for results and operational limits.
@@ -140,7 +140,7 @@ See WINDOWS_STATUS.md for results and operational limits.
 ## Deliberately unfinished or not verified here
 
 - Some physical rental-to-Quicken-tag mappings remain unresolved, including the
-  two Bell WM locations. Only supported identities receive automatic unit tags.
+  two Example WM locations. Only supported identities receive automatic unit tags.
 - Other Quicken versions and languages have not been validated; unexpected
   layouts/dialogs fail closed. Supported entry types and length limits are
   documented in WINDOWS_STATUS.md.

@@ -7,12 +7,12 @@ from quicker.review import create_candidates
 from sqlalchemy import select
 
 
-@pytest.mark.parametrize("parcel", ["00714311", "007-143-11", " 007 143 11 "])
+@pytest.mark.parametrize("parcel", ["90000005", "900-000-05", " 900 000 05 "])
 def test_parcel_separators_preserve_identity(parcel):
-    assert washoe_property_from_parcel(parcel) == "Bell St."
+    assert washoe_property_from_parcel(parcel) == "Example St."
 
 
-@pytest.mark.parametrize("parcel", [None, "714311", "00714312", "APN00714311"])
+@pytest.mark.parametrize("parcel", [None, "900005", "99999999", "APN90000005"])
 def test_unknown_or_incomplete_parcel_is_not_guessed(parcel):
     assert washoe_property_from_parcel(parcel) is None
 
@@ -20,7 +20,7 @@ def test_unknown_or_incomplete_parcel_is_not_guessed(parcel):
 @pytest.mark.parametrize(
     "payee,paid,expected",
     [
-        ("Washoe County Treasurer", True, "Bell St."),
+        ("Washoe County Treasurer", True, "Example St."),
         ("Other County Treasurer", True, None),
         ("Washoe County Treasurer", False, None),
     ],
@@ -38,7 +38,7 @@ def test_paid_tax_mapping_and_latest_account(db, photo, payee, paid, expected):
                     "date": "2026-08-10",
                     "date_basis": "payment",
                     "amount": "403.11",
-                    "parcel": "00714311",
+                    "parcel": "90000005",
                 }
             ],
         }
@@ -50,7 +50,7 @@ def test_paid_tax_mapping_and_latest_account(db, photo, payee, paid, expected):
             assert row is None and len(ignored) == 1
         else:
             assert row.data["property"] == expected
-            assert row.data["account"] == ("2027 Bell St." if expected else None)
+            assert row.data["account"] == ("2027 Example St." if expected else None)
             assert row.status == "review"
             assert row.data["unit"] == ("whole_property" if expected else "unresolved")
             assert row.data["amount_minor"] == -40311

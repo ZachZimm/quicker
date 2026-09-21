@@ -1884,8 +1884,8 @@ function Settings({ catalog, run }: { catalog: Catalog; run: Run }) {
                 <input
                   type="number"
                   min="2000"
-                  max="32000"
-                  value={config.output_limit || 12000}
+                  max="65536"
+                  value={config.output_limit || 32768}
                   onChange={(e) =>
                     setConfig({
                       ...config,

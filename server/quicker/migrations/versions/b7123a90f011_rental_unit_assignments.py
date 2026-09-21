@@ -12,14 +12,11 @@ down_revision = "9b9eb6571ac7"
 branch_labels = None
 depends_on = None
 
-# Frozen migration data; later profile edits must not change this migration.
-UNITS = {
-    "Bell St.": ["1008 Bell", "2 Bell"],
-    "1810 G Street": ["G Street"],
-    "Holman Circle": ["Holman 07", "Holman 09"],
-    "Holman Way": ["Holman 83", "Holman 85"],
-    "West 6th Street": ["1375-75", "1375-77"],
-}
+# The installation's frozen migration mapping is private application data.
+# Keep legacy_units separate from later edits to the current property directory.
+from quicker.private_profile import load_private_profile
+
+UNITS = load_private_profile().get("legacy_units", {})
 
 
 def upgrade():

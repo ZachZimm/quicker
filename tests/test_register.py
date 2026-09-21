@@ -26,7 +26,7 @@ def test_register_edit_route_approve_remove_restore_and_source(browser_url, auth
     from quicker.db import Setting
     with db.write() as session:
         setting = session.get(Setting, "catalog")
-        setting.value = {**setting.value, "tags": setting.value["tags"] + [{"name": "2 Bell"}]}
+        setting.value = {**setting.value, "tags": setting.value["tags"] + [{"name": "2 Example"}]}
     with sync_playwright() as p:
         browser = p.chromium.launch()
         page = browser.new_page(viewport={"width": 1600, "height": 1000})
@@ -35,35 +35,35 @@ def test_register_edit_route_approve_remove_restore_and_source(browser_url, auth
         edit(row, "date", "2027-02-15")
         page.keyboard.press("Tab")
         expect(cell(row, "payee").get_by_role("button")).to_be_focused()
-        expect(cell(row, "account")).to_contain_text("2027 Bell St.")
-        edit(row, "unit", "2 Bell")
+        expect(cell(row, "account")).to_contain_text("2027 Example St.")
+        edit(row, "unit", "2 Example")
         page.keyboard.press("Tab")
         edit(row, "category", "Utilities")
         page.keyboard.press("Enter")
         expect(row.get_by_role("status")).to_be_empty()
         saved = auth.get("/api/transactions").json()[0]
         assert saved["data"]["date"] == "2027-02-15"
-        assert saved["data"]["unit"] == "2 Bell"
-        assert saved["data"]["account"] == "2027 Bell St."
+        assert saved["data"]["unit"] == "2 Example"
+        assert saved["data"]["account"] == "2027 Example St."
         assert saved["status"] == "review"
         # Cancelling a property edit also restores its derived unit and account.
         edit(row, "property", "R&K Properties")
         expect(cell(row, "unit")).to_contain_text("Unit unresolved")
         page.keyboard.press("Escape")
-        expect(cell(row, "unit")).to_contain_text("2 Bell")
-        expect(cell(row, "account")).to_contain_text("2027 Bell St.")
-        edit(row, "account", "2026 Bell St.")
+        expect(cell(row, "unit")).to_contain_text("2 Example")
+        expect(cell(row, "account")).to_contain_text("2027 Example St.")
+        edit(row, "account", "2026 Example St.")
         page.keyboard.press("Enter")
         expect(row.get_by_role("status")).to_be_empty()
         expect(cell(row, "account")).to_contain_text("Override")
         edit(row, "account", "Use automatic account")
         page.keyboard.press("Enter")
         expect(row.get_by_role("status")).to_be_empty()
-        expect(cell(row, "account")).to_contain_text("2027 Bell St.")
+        expect(cell(row, "account")).to_contain_text("2027 Example St.")
         # Detail view includes the saved grid draft and the original document.
         row.get_by_role("button", name="Details and source", exact=False).click()
         expect(page.get_by_label("Payment / transaction date", exact=True)).to_have_value("2027-02-15")
-        expect(page.get_by_label("Unit", exact=True)).to_have_value("2 Bell")
+        expect(page.get_by_label("Unit", exact=True)).to_have_value("2 Example")
         expect(page.locator(".source-viewer img")).to_be_visible()
         page.get_by_role("button", name="Close transaction").click()
         expect(row.get_by_role("button", name="Details and source", exact=False)).to_be_focused()

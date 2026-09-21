@@ -17,7 +17,7 @@ all 35 account API/controller/browser tests passed, including three added tests.
 TypeScript compilation, production bundling, changed Python lint and whitespace
 checks passed. The Windows package was rebuilt and restarted with existing
 pairing/configuration/journals. The original QDF is open again. The packaged client
-completed a fresh production export against `100.77.107.36:8999`, advancing the
+completed a fresh production export against `<quicker-server>:8999`, advancing the
 reference to generation 7. All account/transaction mutations used the disconnected
 test copy and isolated local server databases.
 
@@ -39,7 +39,7 @@ client already uses the existing account-request protocol on the deployed server
   server databases; production reference data never received the test transactions.
 - Complete native exports include all accounts, dates 1901–2099, transactions,
   account/category lists and memorized payees, always at a new output path.
-- Live entry verified both Bell rentals with expense and unit tags, shared-property
+- Live entry verified both Example rentals with expense and unit tags, shared-property
   expenses, an R&K refund, and the exact R&K insurance account/category exception.
   All successful cases matched a subsequent native export exactly. An initial
   overlong probe exposed QIF memo truncation; input validation now prevents it.

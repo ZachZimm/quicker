@@ -1,4 +1,5 @@
 import io
+import json
 import socket
 import threading
 import time
@@ -8,10 +9,24 @@ import pytest
 import uvicorn
 from fastapi.testclient import TestClient
 from PIL import Image
+from quicker import matching, profile, units
 from quicker.app import create_app
 from quicker.catalog import import_catalog
 from quicker.db import Database, User
 from quicker.security import password_hash
+
+
+@pytest.fixture(autouse=True)
+def synthetic_property_profile(monkeypatch):
+    path = Path(__file__).parent / "fixtures" / "private-profile.json"
+    data = json.loads(path.read_text())
+    monkeypatch.setenv("QUICKER_PROFILE_PATH", str(path))
+    monkeypatch.setattr(profile, "PROPERTIES", data["properties"])
+    monkeypatch.setattr(profile, "WASHOE_PARCELS", data["parcels"])
+    monkeypatch.setattr(profile, "VERIFIED_UNIT_MAPPINGS", data["unit_mappings"])
+    monkeypatch.setattr(units, "PROPERTIES", data["properties"])
+    monkeypatch.setattr(matching, "PROPERTIES", data["properties"])
+    monkeypatch.setattr(units, "VERIFIED_UNIT_MAPPINGS", data["unit_mappings"])
 
 QIF = """!Type:Tag
 NWater
@@ -26,10 +41,10 @@ NRepairs
 E
 ^
 !Account
-N2026 Bell St.
+N2026 Example St.
 TBank
 ^
-N2027 Bell St.
+N2027 Example St.
 TBank
 ^
 NR&K Properties 2026

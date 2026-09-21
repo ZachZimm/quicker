@@ -9,6 +9,7 @@ from sqlalchemy import delete
 
 from .catalog import catalog
 from .db import BrowserSession, Database, User
+from .private_profile import profile_path
 from .reference_exports import store_export
 from .security import password_hash
 
@@ -73,6 +74,9 @@ def main():
             source.backup(dest)
         # Originals are immutable and never deleted, so copying after the DB snapshot preserves every reference.
         shutil.copytree(db.blobs, target / "documents")
+        if profile_path().is_file():
+            shutil.copy2(profile_path(), target / "private-profile.json")
+            (target / "private-profile.json").chmod(0o600)
         print(f"Backup written to {target}")
 
 

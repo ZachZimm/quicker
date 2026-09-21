@@ -137,7 +137,7 @@ def test_browser_reference_coverage_and_historical_duplicate_review(browser_url,
         expect(page.locator(".reference-coverage")).to_contain_text("4 transactions")
         expect(page.locator(".reference-coverage")).to_contain_text("1 with blank payees retained")
         expect(page.locator(".reference-coverage")).to_contain_text("2026-05-07")
-        expect(page.locator(".property-directory")).to_contain_text("1008 Bell")
+        expect(page.locator(".property-directory")).to_contain_text("4100 Example")
         page.set_viewport_size({"width": 390, "height": 844})
         assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
         browser.close()
@@ -150,7 +150,7 @@ def test_browser_rental_selection_preserves_expense_tag(browser_url, auth, db, p
     with db.write() as session:
         setting = session.get(Setting, 'catalog')
         setting.value = {**setting.value, 'tags': setting.value['tags'] + [
-            {'name': '1008 Bell'}, {'name': '2 Bell'}, {'name': 'Utilities'},
+            {'name': '4100 Example'}, {'name': '2 Example'}, {'name': 'Utilities'},
         ]}
     invoice(auth, db, photo)
     with sync_playwright() as p:
@@ -164,13 +164,13 @@ def test_browser_rental_selection_preserves_expense_tag(browser_url, auth, db, p
         page.get_by_role('button', name='Details and source for Example Energy', exact=True).click()
         expect(page.get_by_label('Unit', exact=True)).to_have_value('unresolved')
         expect(page.get_by_text('Printed utility account: 001-234', exact=True)).to_be_visible()
-        page.get_by_label('Unit', exact=True).select_option('2 Bell')
-        expect(page.get_by_text('Quicken tags: Utilities, 2 Bell', exact=True)).to_be_visible()
+        page.get_by_label('Unit', exact=True).select_option('2 Example')
+        expect(page.get_by_text('Quicken tags: Utilities, 2 Example', exact=True)).to_be_visible()
         page.get_by_role('button', name='Save for review', exact=True).click()
         expect(page.get_by_role('dialog')).to_have_count(0)
         page.get_by_role('button', name='Details and source for Example Energy', exact=True).click()
-        expect(page.get_by_label('Unit', exact=True)).to_have_value('2 Bell')
-        expect(page.get_by_role('combobox', name='Destination account', exact=True)).to_have_value('2027 Bell St.')
+        expect(page.get_by_label('Unit', exact=True)).to_have_value('2 Example')
+        expect(page.get_by_role('combobox', name='Destination account', exact=True)).to_have_value('2027 Example St.')
         page.get_by_label('Unit', exact=True).select_option('whole_property')
         expect(page.get_by_text('Quicken tags: Utilities', exact=True)).to_be_visible()
         page.get_by_label('Property or business', exact=True).select_option('R&K Properties')
@@ -186,7 +186,7 @@ def test_browser_corrections_and_existing_link(browser_url, auth, db, photo):
     from test_workflow import ready
 
     ready(auth, db, photo)
-    store_export(db, export(account="2026 Bell St.", amount="214.55", day="7/19'26", payee="Example Energy").encode(), "test.QIF")
+    store_export(db, export(account="2026 Example St.", amount="214.55", day="7/19'26", payee="Example Energy").encode(), "test.QIF")
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page(viewport={"width": 1440, "height": 1000})

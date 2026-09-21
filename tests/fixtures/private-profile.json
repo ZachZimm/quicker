@@ -1,0 +1,272 @@
+{
+  "properties": [
+    {
+      "id": "example_property_1",
+      "name": "Example St.",
+      "aliases": [
+        "Example;One Half",
+        "Example;one half"
+      ],
+      "units": [
+        "4100 Example",
+        "2 Example"
+      ],
+      "addresses": [
+        {
+          "street": "4100 Example St",
+          "city": "Reno",
+          "state": "NV"
+        }
+      ]
+    },
+    {
+      "id": "example_property_2",
+      "addresses": [
+        {
+          "street": "4200 Fiction St",
+          "city": "Sparks",
+          "state": "NV"
+        }
+      ],
+      "name": "4200 Fiction Street",
+      "aliases": [
+        "Fiction Street"
+      ],
+      "units": [
+        "Fiction Street"
+      ]
+    },
+    {
+      "id": "example_property_3",
+      "addresses": [
+        {
+          "street": "4300 Demo Ln",
+          "city": "Sparks",
+          "state": "NV"
+        }
+      ],
+      "name": "Demo Lane",
+      "aliases": [
+        "Demo"
+      ],
+      "units": []
+    },
+    {
+      "id": "example_property_4",
+      "addresses": [
+        {
+          "street": "4103 Sample Cir",
+          "city": "Sparks",
+          "state": "NV"
+        },
+        {
+          "street": "4101 Sample Cir",
+          "city": "Sparks",
+          "state": "NV"
+        }
+      ],
+      "name": "Sample Circle",
+      "aliases": [],
+      "units": [
+        "Sample 07",
+        "Sample 09"
+      ]
+    },
+    {
+      "id": "example_property_5",
+      "addresses": [
+        {
+          "street": "4400 Sample Way",
+          "city": "Sparks",
+          "state": "NV"
+        },
+        {
+          "street": "4402 Sample Way",
+          "city": "Sparks",
+          "state": "NV"
+        }
+      ],
+      "name": "Sample Way",
+      "aliases": [],
+      "units": [
+        "Sample 83",
+        "Sample 85"
+      ]
+    },
+    {
+      "id": "example_property_6",
+      "addresses": [
+        {
+          "street": "4500 Illustration Pl",
+          "city": "Reno",
+          "state": "NV"
+        }
+      ],
+      "name": "Illustration Place",
+      "aliases": [
+        "Illustration"
+      ],
+      "units": []
+    },
+    {
+      "id": "example_property_7",
+      "name": "Test Way",
+      "aliases": [
+        "Test"
+      ],
+      "units": []
+    },
+    {
+      "id": "example_property_8",
+      "addresses": [
+        {
+          "street": "4700 W Example St",
+          "city": "Reno",
+          "state": "NV"
+        },
+        {
+          "street": "4702 W Example St",
+          "city": "Reno",
+          "state": "NV"
+        }
+      ],
+      "name": "West Example Street",
+      "aliases": [
+        "West Example Street"
+      ],
+      "units": [
+        "4700-75",
+        "4700-77"
+      ]
+    },
+    {
+      "id": "example_property_9",
+      "name": "R&K Properties",
+      "aliases": [
+        "R&KProperties"
+      ],
+      "units": []
+    }
+  ],
+  "parcels": {
+    "90000001": {
+      "property": "4200 Fiction Street",
+      "address": "4200 FICTION ST",
+      "notice": "example-tax-notice-1.png"
+    },
+    "90000002": {
+      "property": "Demo Lane",
+      "address": "4300 DEMO LN",
+      "notice": "example-tax-notice-2.png"
+    },
+    "90000003": {
+      "property": "Sample Way",
+      "address": "4400 SAMPLE WAY",
+      "notice": "example-tax-notice-3.png"
+    },
+    "90000004": {
+      "property": "Sample Circle",
+      "address": "4103 SAMPLE CIR",
+      "notice": "example-tax-notice-4.png"
+    },
+    "90000005": {
+      "property": "Example St.",
+      "address": "4100 EXAMPLE ST",
+      "notice": "example-tax-notice-5.png"
+    },
+    "90000006": {
+      "property": "Illustration Place",
+      "address": "4500 ILLUSTRATION PL",
+      "notice": "example-tax-notice-6.png"
+    },
+    "90000007": {
+      "property": "Test Way",
+      "address": "4600 TEST WAY",
+      "notice": "example-tax-notice-7.png"
+    },
+    "90000008": {
+      "property": "West Example Street",
+      "address": "4700 W EXAMPLE ST",
+      "notice": "example-tax-notice-8.png"
+    }
+  },
+  "unit_mappings": [
+    {
+      "property": "Sample Way",
+      "unit": "Sample 85",
+      "merchant": "Waste Management",
+      "service_customer_id": "9-80000-00001",
+      "evidence": "Synthetic utility statement 1."
+    },
+    {
+      "property": "Sample Way",
+      "unit": "Sample 83",
+      "merchant": "Waste Management",
+      "service_customer_id": "9-80000-00002",
+      "evidence": "Synthetic utility statement 2."
+    },
+    {
+      "property": "Sample Circle",
+      "unit": "Sample 07",
+      "merchant": "Waste Management",
+      "service_customer_id": "9-80000-00003",
+      "evidence": "Synthetic utility statement 3."
+    },
+    {
+      "property": "Sample Circle",
+      "unit": "Sample 09",
+      "merchant": "Waste Management",
+      "service_customer_id": "9-80000-00004",
+      "evidence": "Synthetic utility statement 4."
+    },
+    {
+      "property": "West Example Street",
+      "unit": "4700-75",
+      "merchant": "Waste Management",
+      "service_customer_id": "9-80000-00005",
+      "evidence": "Synthetic utility statement 5."
+    },
+    {
+      "property": "West Example Street",
+      "unit": "4700-77",
+      "merchant": "Waste Management",
+      "service_customer_id": "9-80000-00006",
+      "evidence": "Synthetic utility statement 6."
+    },
+    {
+      "property": "Example St.",
+      "unit": "unresolved",
+      "merchant": "Waste Management",
+      "service_customer_id": "9-80000-00007",
+      "evidence": "Synthetic utility statement 7."
+    },
+    {
+      "property": "Example St.",
+      "unit": "unresolved",
+      "merchant": "Waste Management",
+      "service_customer_id": "9-80000-00008",
+      "evidence": "Synthetic utility statement 8."
+    }
+  ],
+  "legacy_units": {
+    "Example St.": [
+      "4100 Example",
+      "2 Example"
+    ],
+    "4200 Fiction Street": [
+      "Fiction Street"
+    ],
+    "Sample Circle": [
+      "Sample 07",
+      "Sample 09"
+    ],
+    "Sample Way": [
+      "Sample 83",
+      "Sample 85"
+    ],
+    "West Example Street": [
+      "4700-75",
+      "4700-77"
+    ]
+  }
+}

@@ -9,6 +9,9 @@ web/node_modules/
 web/dist/
 .local/
 data/
+# Real property identities belong in local data, never tracked examples.
+private-profile.json
+!tests/fixtures/private-profile.json
 client/build/
 client/dist/
 test-results/
