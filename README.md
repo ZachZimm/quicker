@@ -143,7 +143,12 @@ Select the intended `.QDF` in the companion and open that file in Quicken.
 with transactions and reference lists, including changes made outside Quicker.
 The companion refreshes on connection and every 15 minutes when the desktop
 has been idle for at least a minute and Quicken is not the foreground app.
-Background refresh defers while the desktop is in use, locked, or showing a dialog.
+Background refresh defers while the desktop is in use, locked, showing a dialog,
+or the foreground application covers its monitor, including fullscreen video
+and borderless games. After an automatic export, it restores the previously
+active window if it still exists and the user has not taken over or switched apps.
+Windows can refuse a focus change; restoration failures are logged. Manual
+refresh and the exports required for transaction entry still run on request.
 The optional QIF watcher still backs up externally created files; a watched file
 never authorizes entry.
 
@@ -163,7 +168,7 @@ The companion never repeats an attempted import. When a current export contains
 no verification reference, the browser can return the row to review after you
 confirm that it was not entered. Duplicate or mismatched references require
 correction in Quicken and another refresh. Preserve the companion's local state
-folder and journal when updating. See [WINDOWS_STATUS.md](WINDOWS_STATUS.md).
+folder and journal when updating. See [Windows client plan](WINDOWS_BACKGROUND_CLIENT.md).
 
 Settings lists each distinct received version, its transaction coverage and a
 backup download. The CLI `import-qif` command uses the same versioned storage.
@@ -247,8 +252,9 @@ without an opening-balance transaction or online connection. Fresh native export
 before and after creation verify the exact name and Bank type. Older clients leave
 requests queued. Interrupted attempts are verified without repeating creation;
 if the account is absent, inspect Quicken and finish creating that exact account
-manually, then refresh. Keep the companion's journal when updating. The API
-contract and validation details are in [WINDOWS_ACCOUNT_CREATION.md](WINDOWS_ACCOUNT_CREATION.md).
+manually, then refresh. Keep the companion's journal when updating. The
+[Windows client plan](WINDOWS_BACKGROUND_CLIENT.md) summarizes the guarantees
+to preserve and links to the implementation and tests.
 
 ## Rental units and shared expenses
 
@@ -388,8 +394,9 @@ To build a standalone Windows folder, run:
 ```
 
 Distribute the entire `client/dist/Quicker` folder, including `Quicker.exe`.
-Packaging must run on Windows. Native validation results and the supported
-Quicken version are recorded in [WINDOWS_STATUS.md](WINDOWS_STATUS.md).
+Packaging must run on Windows. The supported Quicken version, deployment notes,
+and proposed background behavior are documented in the
+[Windows client plan](WINDOWS_BACKGROUND_CLIENT.md).
 
 ## Persistent deployment and backups
 

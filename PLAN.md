@@ -17,10 +17,10 @@ Never simulate synchronization by appending Quicker transactions to a one-time
 export. Provide refresh without entry and idle background refresh that respects
 use of the Windows desktop.
 
-Export creation and its freshness-event contract are the first Windows milestone.
-The current passive watcher is a fallback, not the completed automation. See
-[WINDOWS_HANDOFF.md](WINDOWS_HANDOFF.md) for the implementation sequence, existing
-modules, concurrency requirements and acceptance checks.
+Native export creation and its freshness-event contract are implemented. The
+passive watcher remains a fallback for externally created exports. See
+[Windows client plan](WINDOWS_BACKGROUND_CLIENT.md) for proposed background
+operation changes, existing guarantees and acceptance checks.
 
 ## Confirmed requirements
 

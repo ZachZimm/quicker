@@ -1,7 +1,11 @@
 import hashlib
 import json
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import httpx
+import pytest
+from quicker_client.desktop import DesktopUnavailable
 from quicker_client.sync import Companion, archive_path
 
 
@@ -14,6 +18,31 @@ def make_engine(tmp_path, handler):
         tmp_path / "state",
         transport=httpx.MockTransport(handler),
     )
+
+
+def test_automatic_export_waits_fifteen_minutes_and_retries_after_deferral(tmp_path, monkeypatch):
+    engine = make_engine(tmp_path, lambda request: httpx.Response(200, json=[]))
+    engine.protocol = 1
+    engine.last_refresh = 10000
+    engine.operations = SimpleNamespace(adapter=SimpleNamespace(ready=Mock()), start=Mock(), process=Mock())
+    now = 10000 + 899
+    monkeypatch.setattr("quicker_client.sync.time.time", lambda: now)
+    try:
+        engine.desktop_cycle()
+        engine.operations.start.assert_not_called()
+        now = 10000 + 901
+        engine.operations.adapter.ready.side_effect = DesktopUnavailable("fullscreen")
+        with pytest.raises(DesktopUnavailable, match="fullscreen"):
+            engine.desktop_cycle()
+        engine.operations.start.assert_not_called()
+        assert engine.last_refresh == 10000
+        engine.operations.adapter.ready.side_effect = None
+        engine.desktop_cycle()
+        engine.operations.start.assert_called_once_with("refresh", background=True)
+        engine.operations.process.assert_called_once_with(engine.operations.start.return_value)
+        assert engine.last_refresh == now
+    finally:
+        engine.http.close()
 
 
 def test_source_is_retained_until_ack_and_retry_reuses_request(tmp_path, photo):

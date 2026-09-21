@@ -8,10 +8,27 @@ from __future__ import annotations
 
 import ctypes
 import hashlib
+import logging
 import os
 import time
 from contextlib import contextmanager
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+
+def is_fullscreen(window):
+    """Conservatively detect windows covering their monitor, including borderless apps."""
+    import win32api
+    import win32gui
+
+    if not window or win32gui.IsIconic(window) or not win32gui.IsWindowVisible(window):
+        return False
+    if win32gui.GetClassName(window) in {"Progman", "WorkerW", "Shell_TrayWnd", "Shell_SecondaryTrayWnd"}:
+        return False
+    monitor = win32api.GetMonitorInfo(win32api.MonitorFromWindow(window, 2))["Monitor"]
+    left, top, right, bottom = win32gui.GetWindowRect(window)
+    return left <= monitor[0] and top <= monitor[1] and right >= monitor[2] and bottom >= monitor[3]
 
 
 class DesktopUnavailable(RuntimeError):
@@ -72,9 +89,15 @@ class WindowsQuicken:
             raise DesktopUnavailable("Close the open Quicken dialog before starting")
         if background:
             idle = (win32api.GetTickCount() - win32api.GetLastInputInfo()) & 0xFFFFFFFF
-            foreground = win32process.GetWindowThreadProcessId(win32gui.GetForegroundWindow())[1]
-            if idle < 60000 or foreground == self.main.process_id():
+            foreground = win32gui.GetForegroundWindow()
+            if (
+                idle < 60000
+                or not foreground
+                or win32process.GetWindowThreadProcessId(foreground)[1] == self.main.process_id()
+            ):
                 raise DesktopUnavailable("Refresh deferred while the desktop or Quicken is in use")
+            if is_fullscreen(foreground):
+                raise DesktopUnavailable("Refresh deferred while the foreground application is fullscreen")
         return {
             "file_identity": self.identity,
             "file_name": self.path.name,
@@ -165,21 +188,56 @@ class WindowsQuicken:
     def session(self, background=False):
         import win32api
         import win32event
+        import win32gui
+        import win32process
 
         handle = win32event.CreateMutex(None, False, "Local\\Quicker-Quicken-Desktop")
         result = win32event.WaitForSingleObject(handle, 0)
         if result not in (win32event.WAIT_OBJECT_0, win32event.WAIT_ABANDONED):
             win32api.CloseHandle(handle)
             raise DesktopUnavailable("Another Quicker operation is using Quicken")
+        previous = None
         try:
             self.ready(background)
+            if background:
+                window = win32gui.GetForegroundWindow()
+                if window:
+                    previous = (window, win32process.GetWindowThreadProcessId(window))
             self.main.set_focus()
             with UserActivityGuard() as self.guard:
                 yield self
         finally:
-            self.guard = None
-            win32event.ReleaseMutex(handle)
-            win32api.CloseHandle(handle)
+            try:
+                if previous and not (self.guard and self.guard.interrupted):
+                    self._restore_foreground(*previous)
+            finally:
+                self.guard = None
+                win32event.ReleaseMutex(handle)
+                win32api.CloseHandle(handle)
+
+    def _restore_foreground(self, window, identity):
+        import win32gui
+        import win32process
+
+        try:
+            # Do not replace a window the user selected or reuse a destroyed HWND.
+            current = win32gui.GetForegroundWindow()
+            if (
+                not current
+                or win32process.GetWindowThreadProcessId(current)[1] != self.main.process_id()
+                or not win32gui.IsWindow(window)
+                or not win32gui.IsWindowVisible(window)
+                or win32gui.IsIconic(window)
+                or win32process.GetWindowThreadProcessId(window) != identity
+            ):
+                return
+            win32gui.SetForegroundWindow(window)
+            if win32gui.GetForegroundWindow() != window:
+                logger.warning("Windows did not restore the application active before the automatic export")
+        except Exception:
+            logger.warning(
+                "Could not restore the application active before the automatic export", exc_info=True
+            )
 
     def export(self, destination):
         """Must run inside session(); returns only a new, completed export."""

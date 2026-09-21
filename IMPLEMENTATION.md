@@ -1,8 +1,9 @@
 # Implementation status
 
 The implementation covers ingestion, review, archival and Windows Quicken entry
-with fresh reference exports and durable reconciliation. WINDOWS_STATUS.md records
-the September 17 target-machine validation and deployment instructions.
+with fresh reference exports and durable reconciliation.
+[Windows client plan](WINDOWS_BACKGROUND_CLIENT.md) records the supported native
+baseline, deployment notes and proposed background operation improvements.
 
 ## Implemented
 
@@ -130,12 +131,13 @@ other models can keep their default reasoning mode.
 
 ## Windows implementation
 
-The workflow in WINDOWS_HANDOFF.md is implemented. Native Quicken 27.1.69.29 tests
+Native export, entry and account creation are implemented. Quicken 27.1.69.29 tests
 used its disconnected copy/template feature and isolated server databases.
 Verified cases include both Example rentals with expense/unit tags, whole-property
 expenses, a positive R&K refund, and the exact R&K Properties account with
 Insurance (Business):Truck. The original data file was reopened after testing.
-See WINDOWS_STATUS.md for results and operational limits.
+See [Windows client plan](WINDOWS_BACKGROUND_CLIENT.md) for operational limits and
+the next implementation pass.
 
 ## Deliberately unfinished or not verified here
 
@@ -143,7 +145,7 @@ See WINDOWS_STATUS.md for results and operational limits.
   two Example WM locations. Only supported identities receive automatic unit tags.
 - Other Quicken versions and languages have not been validated; unexpected
   layouts/dialogs fail closed. Supported entry types and length limits are
-  documented in WINDOWS_STATUS.md.
+  documented in [Windows client plan](WINDOWS_BACKGROUND_CLIENT.md).
 - systemd/Caddy installation and certificate trust on client devices. Development
   processes run directly, with an HTTP LAN preview. Persistent HTTPS deployment
   is documented but not installed automatically.

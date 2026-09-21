@@ -16,6 +16,7 @@ from uuid import uuid4
 import httpx
 
 SUPPORTED = {".jpg", ".jpeg", ".png", ".heic", ".heif"}
+AUTO_EXPORT_INTERVAL_SECONDS = 15 * 60
 
 
 def checksum(path):
@@ -148,8 +149,8 @@ class Companion:
                 self.commands.put((kind, request_id))
                 raise
         pending = self.request("GET", "/api/device/operations")
-        if not pending and not accounts and time.time() - self.last_refresh > 900:
-            # Never steal focus on connect, on a timer, or while Quicken is in use.
+        if not pending and not accounts and time.time() - self.last_refresh > AUTO_EXPORT_INTERVAL_SECONDS:
+            # Background exports wait for an idle desktop without a fullscreen app.
             ops.adapter.ready(background=True)
             pending = [ops.start("refresh", background=True)]
             self.last_refresh = time.time()

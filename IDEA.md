@@ -81,5 +81,6 @@ The Windows companion must create fresh exports directly from Quicken, including
 transactions entered manually or by other tools. It must refresh the server's
 reference before entry and export again afterward to verify results. Updating an
 old export with only Quicker's own transactions does not satisfy synchronization.
-Automated export creation is the first milestone of the Windows implementation;
-see WINDOWS_HANDOFF.md for the workflow and acceptance checks.
+Automated export creation is implemented. See
+[Windows client plan](WINDOWS_BACKGROUND_CLIENT.md) for existing guarantees and
+the proposed background operation improvements.
