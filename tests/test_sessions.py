@@ -73,7 +73,7 @@ def test_password_reset_revokes_persistent_sessions(auth, db, monkeypatch):
 
     monkeypatch.setenv("QUICKER_DATA_DIR", str(db.directory))
     monkeypatch.setattr("sys.argv", ["quicker", "setup", "--username", "admin"])
-    monkeypatch.setattr("quicker.cli.getpass.getpass", lambda prompt: "replacement-password-12345")
+    monkeypatch.setattr("quicker.cli.getpass.getpass", lambda prompt: "new-pass")
     main()
     assert auth.get("/api/session").status_code == 401
 

@@ -31,9 +31,9 @@ def main():
     db = Database()
     db.migrate()
     if args.command == "setup":
-        password = getpass.getpass("Shared account password (at least 12 characters): ")
-        if len(password) < 12 or password != getpass.getpass("Confirm password: "):
-            parser.error("Passwords must match and contain at least 12 characters")
+        password = getpass.getpass("Shared account password (at least 8 characters): ")
+        if len(password) < 8 or password != getpass.getpass("Confirm password: "):
+            parser.error("Passwords must match and contain at least 8 characters")
         with db.write() as session:
             session.execute(delete(User))
             session.execute(delete(BrowserSession))
