@@ -1,4 +1,6 @@
 .env
+/start.sh
+/start-worker.sh
 .venv/
 __pycache__/
 *.pyc
