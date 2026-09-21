@@ -375,6 +375,8 @@ Create a pairing code in the browser's **Windows companion** tab. Enter the Linu
 server address and code in the Windows app, choose separate input and archive
 folders, pair, then click **Save & connect**. Pairing codes expire in ten minutes.
 Only one active companion is supported; revoke an old device before replacement.
+The default input folder is **Quicker Input** on the Windows Desktop, including
+redirected desktops such as OneDrive. Existing saved folder choices are preserved.
 
 The app waits until input-file size and modification time are stable across two
 scans. It uploads, checks the server receipt, writes and verifies the archive,

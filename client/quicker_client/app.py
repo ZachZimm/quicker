@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
-from PySide6.QtCore import QLockFile, QObject, QTimer, QUrl, Signal
+from PySide6.QtCore import QLockFile, QObject, QStandardPaths, QTimer, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import (
@@ -87,7 +87,8 @@ class Window(QMainWindow):
         self.server = QLineEdit(self.config.get("server", "http://localhost:8999"))
         self.code = QLineEdit()
         self.code.setEchoMode(QLineEdit.Password)
-        self.input = QLineEdit(self.config.get("input", str(Path.home() / "Documents" / "Quicker Input")))
+        desktop = QStandardPaths.writableLocation(QStandardPaths.DesktopLocation) or str(Path.home() / "Desktop")
+        self.input = QLineEdit(self.config.get("input", str(Path(desktop) / "Quicker Input")))
         self.archive = QLineEdit(
             self.config.get("archive", str(Path.home() / "Documents" / "Quicker Archive"))
         )

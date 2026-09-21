@@ -28,6 +28,12 @@ directory, and credentials are redacted. Startup registration is the `Quicker`
 value under the current user's Windows `Run` key; it points at the installed
 executable with `--startup`. Launch after moving the installation updates that path.
 
+New setups default to `Quicker Input` in the operating system's Desktop location,
+which includes OneDrive-redirection. Saved input paths take precedence. On this
+Windows installation the existing input directory and saved configuration were
+moved together from Documents to `C:\Users\kjole\OneDrive\Desktop\Quicker Input`;
+the archive location and pairing were retained.
+
 The current export changes retain the 15-minute interval, defer background
 exports while the foreground window covers its monitor, and restore the previous
 application after automatic exports. Restoration respects user input, application

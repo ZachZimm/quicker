@@ -11,7 +11,8 @@ def test_companion_window_constructs_offscreen(tmp_path):
         pytest.skip("Install the client extra to validate the desktop window")
     code = """
 from PySide6.QtWidgets import QApplication, QPushButton
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QTimer, QStandardPaths
+from pathlib import Path
 from quicker_client.app import main
 original = QApplication.exec
 def inspect_and_run(app):
@@ -20,6 +21,8 @@ def inspect_and_run(app):
         buttons = window.findChildren(QPushButton)
         entry = next(b for b in buttons if b.text() == 'Enter approved transactions')
         assert not entry.isEnabled()
+        desktop = QStandardPaths.writableLocation(QStandardPaths.DesktopLocation)
+        assert window.input.text() == str(Path(desktop) / 'Quicker Input')
         print('Companion window constructed; entry explicitly disabled', flush=True)
         app.quit()
     QTimer.singleShot(0, inspect)
