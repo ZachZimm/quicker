@@ -309,6 +309,8 @@ function App() {
               catalog={catalog}
               run={run}
               busy={busy}
+              devices={devices}
+              operations={operations}
               onUpload={() => setUploader(true)}
             />
           </div>
@@ -426,6 +428,8 @@ function Review({
   catalog,
   run,
   busy,
+  devices,
+  operations,
   onUpload,
 }: {
   error: string;
@@ -434,6 +438,8 @@ function Review({
   catalog: Catalog;
   run: Run;
   busy: boolean;
+  devices: any[];
+  operations: any[];
   onUpload: () => void;
 }) {
   const [filter, setFilter] = useState("review");
@@ -446,8 +452,33 @@ function Review({
   const [bulkCategory, setBulkCategory] = useState("");
   const [query, setQuery] = useState("");
   const [history, setHistory] = useState<any[] | null>(null);
+  const [requestingEntry, setRequestingEntry] = useState(false);
   useReviewTools(rows, setFilter);
   const edits = useReviewEdits(rows, catalog);
+  const approvedRows = edits.rows.filter((r) => r.status === "approved");
+  const connected = devices.some(
+    (d) => d.connected && d.entry_supported && d.desktop?.file_identity,
+  );
+  const activeOperation = operations.find(
+    (operation) => !["complete", "failed"].includes(operation.status),
+  );
+  const enterApproved = async () => {
+    setRequestingEntry(true);
+    try {
+      await run(async () => {
+        const saved = await Promise.all(
+          approvedRows.map((r) => edits.save(r.id)),
+        );
+        if (!saved.some((r) => r.status === "approved"))
+          throw new Error(
+            "The edited transactions need approval again before entry.",
+          );
+        await post("/entry", { request_id: newRequestId(), kind: "entry" });
+      }, "Entry requested. Keep Quicken open and the desktop idle.");
+    } finally {
+      setRequestingEntry(false);
+    }
+  };
   const visible = edits.rows.filter(
     (r) =>
       r.id === edits.focused ||
@@ -517,6 +548,31 @@ function Review({
     });
   return (
     <section className="review-section">
+      <div className="review-entry-bar">
+        <p id="review-entry-hint" className="muted small">
+          {activeOperation
+            ? activeOperation.message
+            : !connected
+              ? "Connect the Windows companion and configure its Quicken file to enter transactions."
+              : !approvedRows.length
+                ? "Approve transactions to make them available for entry."
+                : `${approvedRows.length} approved. Entry includes all approved transactions, regardless of the current filter.`}
+        </p>
+        <button
+          className="primary"
+          aria-describedby="review-entry-hint"
+          disabled={
+            !connected ||
+            !approvedRows.length ||
+            !!activeOperation ||
+            busy ||
+            requestingEntry
+          }
+          onClick={enterApproved}
+        >
+          Enter approved transactions <ArrowRight size={17} />
+        </button>
+      </div>
       <div className="table-top">
         <div className="tabs" role="tablist" aria-label="Transaction status">
           {[

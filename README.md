@@ -196,6 +196,10 @@ never authorizes entry.
 
 **Enter approved transactions** is available in both apps after updating the
 server and configuring the companion. Keep the desktop idle while it works.
+On the browser's Review page, the button is enabled when the companion is connected
+and transactions are approved. It enters all approved transactions regardless of
+the current filter. Pending register edits are saved first; changed rows need
+approval again before entry.
 Physical input, focus loss, an unexpected dialog, a changed data file, or a
 connection failure stops the operation. Each run claims exact approved revisions
 only after its fresh export activates. Entry uses single-transaction QIF imports

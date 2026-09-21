@@ -340,6 +340,19 @@ main {
   background: #fff;
   overflow: hidden;
 }
+.review-entry-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+}
+.review-entry-bar p {
+  flex: 1 1 240px;
+  margin: 0;
+}
 .table-top {
   display: flex;
   align-items: center;
@@ -1301,7 +1314,8 @@ progress {
   box-shadow: 0 5px 18px #0003;
   font-size: 0.8125rem;
 }
-.search-picker-list [role="option"], .search-picker-list p {
+.search-picker-list [role="option"],
+.search-picker-list p {
   padding: 8px 12px;
   cursor: pointer;
 }

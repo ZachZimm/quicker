@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+import pytest
 from playwright.sync_api import expect, sync_playwright
 from quicker.worker import process_one
 from test_workflow import InvoiceAdapter
@@ -87,7 +88,8 @@ def test_browser_model_outage_retry_and_recovery(browser_url, auth, db, photo):
         browser.close()
 
 
-def test_browser_requests_entry_and_displays_verified_result(browser_url, auth, db, tmp_path):
+@pytest.mark.parametrize("start_tab", ["review", "companion"])
+def test_browser_requests_entry_and_displays_verified_result(browser_url, auth, db, tmp_path, start_tab):
     from quicker_client.operations import Operations
     from test_desktop_operations import FILE, ApiCompanion, FakeQuicken, candidate
 
@@ -103,11 +105,14 @@ def test_browser_requests_entry_and_displays_verified_result(browser_url, auth, 
         page.get_by_label("Username", exact=True).fill("admin")
         page.get_by_label("Password", exact=True).fill("test-password-12345")
         page.get_by_role("button", name="Sign in", exact=True).click()
-        page.get_by_role("button", name="Windows companion", exact=True).click()
+        if start_tab == "companion":
+            page.get_by_role("button", name="Windows companion", exact=True).click()
         button = page.get_by_role("button", name="Enter approved transactions", exact=False)
         expect(button).to_be_enabled()
+        if start_tab == "review":
+            page.screenshot(path=".local/review-entry-button.png", full_page=True)
         button.click()
-        expect(page.get_by_text("Waiting for Quicken", exact=True)).to_be_visible()
+        expect(button.locator("xpath=ancestor::section[1]").get_by_text("Waiting for Quicken", exact=True)).to_be_visible()
         expect(button).to_be_disabled()
         pending = auth.get("/api/device/operations", headers=header).json()
         result = Operations(ApiCompanion(auth, header), FakeQuicken(), tmp_path).process(pending[0])
@@ -121,6 +126,53 @@ def test_browser_requests_entry_and_displays_verified_result(browser_url, auth, 
         page.get_by_role("button", name="Details and source for Desktop Test", exact=True).click()
         expect(page.get_by_text("Verified in a fresh Quicken export.", exact=True)).to_be_visible()
         expect(page.get_by_role("button", name="Save & approve")).to_have_count(0)
+        browser.close()
+
+
+def test_review_entry_requires_connection_and_approvals_and_waits_for_edits(browser_url, auth, db):
+    from quicker.db import Device
+    from sqlalchemy import select
+    from test_desktop_operations import FILE, candidate
+    from test_register import edit, login
+
+    code = auth.post("/api/pair-code").json()["code"]
+    pair = auth.post("/api/pair", json={"name": "Review entry test", "code": code}).json()
+    headers = {"Authorization": "Bearer " + pair["token"]}
+
+    def connect():
+        assert auth.post("/api/device/heartbeat", headers=headers, json={
+            "protocol": 1, "file_identity": FILE, "file_name": "test.QDF", "ready": True,
+        }).status_code == 200
+
+    connect()
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 1440, "height": 1000})
+        login(page, browser_url)
+        button = page.get_by_role("button", name="Enter approved transactions", exact=True)
+        expect(button).to_be_disabled()  # Connected, but no approved rows.
+        row_id = candidate(db)
+        with db.write() as session:
+            session.scalar(select(Device)).heartbeat = 0
+        page.reload()
+        expect(button).to_be_disabled()  # Approved rows, but the client is offline.
+        connect()
+        page.reload()
+        expect(button).to_be_enabled()
+        page.get_by_role("tab", name="Approved", exact=False).click()
+        held = []
+        page.route("**/api/review", lambda route: held.append(route))
+        row = page.locator(f'tr[data-transaction-id="{row_id}"]')
+        edit(row, "payee", "Edited before entry")
+        button.click()
+        expect(button).to_be_disabled()
+        assert len(held) == 1
+        assert auth.get("/api/entry").json() == []
+        held[0].continue_()
+        expect(page.get_by_role("alert")).to_contain_text("need approval again")
+        assert auth.get("/api/entry").json() == []
+        assert auth.get("/api/transactions").json()[0]["status"] == "review"
+        expect(button).to_be_disabled()
         browser.close()
 
 
