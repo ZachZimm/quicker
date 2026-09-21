@@ -1,5 +1,4 @@
 import hashlib
-import json
 import os
 import sys
 import threading
@@ -8,7 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
-from PySide6.QtCore import QLockFile, QObject, QStandardPaths, QTimer, QUrl, Signal
+from PySide6.QtCore import QLockFile, QObject, QSignalBlocker, QStandardPaths, QTimer, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import (
@@ -30,12 +29,26 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .config import ConfigurationStore, migrate_legacy_state
 from .lifecycle import configure_logging, set_startup
 from .sync import Companion
 
 
 def state_directory():
-    return Path(os.environ.get("LOCALAPPDATA", Path.home() / ".config")) / "Quicker"
+    if os.environ.get("QUICKER_STATE_DIR"):
+        return Path(os.environ["QUICKER_STATE_DIR"]).resolve()
+    # AppData can be virtualized for child processes of packaged desktop hosts.
+    # A profile-level directory is shared with ordinary Explorer/sign-in launches.
+    return (Path.home() / ".quicker").resolve()
+
+
+def legacy_state_directories():
+    local = Path(os.environ.get("LOCALAPPDATA", Path.home() / ".config"))
+    candidates = [local / "Quicker"]
+    # Recover installations first configured by the Codex desktop host, whose
+    # child-process AppData writes can land in its private MSIX cache.
+    candidates.extend((local / "Packages").glob("OpenAI.Codex_*/LocalCache/Local/Quicker"))
+    return candidates
 
 
 class Events(QObject):
@@ -69,12 +82,11 @@ class Window(QMainWindow):
         self.state_dir = Path(directory) if directory is not None else state_directory()
         self.state_dir.mkdir(parents=True, exist_ok=True)
         self.config_path = self.state_dir / "config.json"
+        self.settings = ConfigurationStore(self.state_dir)
         self.config_error = False
         try:
-            self.config = json.loads(self.config_path.read_text()) if self.config_path.exists() else {}
-            if not isinstance(self.config, dict):
-                raise TypeError("Invalid configuration")
-        except (OSError, ValueError, TypeError):
+            self.config = self.settings.load()
+        except (OSError, ValueError):
             self.config = {}
             self.config_error = True
         self.logger = configure_logging(self.state_dir, lambda: [self.config.get("token"), self.code.text()])
@@ -87,13 +99,20 @@ class Window(QMainWindow):
         self.server = QLineEdit(self.config.get("server", "http://localhost:8999"))
         self.code = QLineEdit()
         self.code.setEchoMode(QLineEdit.Password)
-        desktop = QStandardPaths.writableLocation(QStandardPaths.DesktopLocation) or str(Path.home() / "Desktop")
+        self.code.setPlaceholderText("Only needed for first-time pairing or re-pairing")
+        self.pairing_status = QLabel()
+        self.pairing_status.setWordWrap(True)
+        self.update_pairing_status()
+        desktop = QStandardPaths.writableLocation(QStandardPaths.DesktopLocation) or str(
+            Path.home() / "Desktop"
+        )
         self.input = QLineEdit(self.config.get("input", str(Path(desktop) / "Quicker Input")))
         self.archive = QLineEdit(
             self.config.get("archive", str(Path.home() / "Documents" / "Quicker Archive"))
         )
         form.addRow("Server address", self.server)
-        form.addRow("Pairing code", self.code)
+        form.addRow("Pairing", self.pairing_status)
+        form.addRow("New pairing code", self.code)
         for label, field in (("Input folder", self.input), ("Archive folder", self.archive)):
             row = QHBoxLayout()
             row.addWidget(field)
@@ -170,6 +189,7 @@ class Window(QMainWindow):
         self.tray_status.setEnabled(False)
         self.menu.addSeparator()
         self.menu.addAction("Open Quicker settings and activity", self.show_settings)
+        self.menu.addAction("Reload saved settings", self.reload_settings)
         self.menu.addAction("Open web interface", self.open_web)
         self.refresh_action = self.menu.addAction(
             "Refresh from Quicken / reconcile", lambda: self.command("refresh")
@@ -191,14 +211,64 @@ class Window(QMainWindow):
         self.monitor.start(250)
         if self.config_error:
             self.log_message(
-                "Configuration could not be read. Original settings are retained; repair config.json before saving."
+                "Saved settings could not be read. Files are preserved. Use Quicker > Reload saved settings; do not re-pair."
             )
+        else:
+            self.logger.info(
+                "Loaded saved settings from %s (paired=%s, recovered=%s)",
+                self.settings.path,
+                bool(self.config.get("token")),
+                self.settings.recovered,
+            )
+            if self.settings.recovered:
+                self.log_message("Recovered saved settings and pairing from the local backup.")
         if auto_connect and self.config.get("token"):
             QTimer.singleShot(0, self.connect)
 
     def show_initial(self):
         if not self.config.get("token") or not self.minimized.isChecked() or not self.tray.isVisible():
             self.show_settings()
+
+    def update_pairing_status(self):
+        if self.config_error:
+            text = "Saved settings unavailable. Reload them; no new pairing code is needed."
+        elif self.config.get("token"):
+            text = "Paired — saved device credential will be reused automatically."
+        else:
+            text = "Not paired. Enter a new code from the server to set up this device."
+        self.pairing_status.setText(text)
+
+    def reload_settings(self):
+        if self.closing or (self.thread and self.thread.is_alive()):
+            self.log_message("Disconnect and wait for sync to stop before reloading settings.")
+            return
+        try:
+            config = self.settings.load()
+        except (OSError, ValueError):
+            self.log_message(
+                "Saved settings and recovery copy are unavailable. Existing files were preserved."
+            )
+            return
+        self.config, self.config_error = config, False
+        for field, key, fallback in (
+            (self.server, "server", "http://localhost:8999"),
+            (self.input, "input", self.input.text()),
+            (self.archive, "archive", self.archive.text()),
+            (self.qif, "qif_path", ""),
+            (self.data_file, "data_file", ""),
+        ):
+            field.setText(config.get(key, fallback))
+        for field, key, fallback in (
+            (self.startup, "start_with_windows", os.name == "nt"),
+            (self.minimized, "start_minimized", True),
+            (self.pause_action, "auto_exports_paused", False),
+        ):
+            with QSignalBlocker(field):
+                field.setChecked(config.get(key, fallback))
+        self.update_pairing_status()
+        self.log_message("Saved settings reloaded.")
+        if config.get("token"):
+            self.connect()
 
     def show_settings(self):
         self.showNormal()
@@ -225,14 +295,12 @@ class Window(QMainWindow):
             raise ValueError(
                 "Repair the unreadable config.json before saving; existing pairing has been retained"
             )
-        temp = self.config_path.with_suffix(".tmp")
-        temp.write_text(json.dumps(self.config, indent=2))
-        if os.name != "nt":
-            temp.chmod(0o600)
-        os.replace(temp, self.config_path)
+        self.settings.save(self.config)
 
     def save_preferences(self):
         try:
+            if self.config_error:
+                raise ValueError("Reload saved settings first")
             set_startup(self.startup.isChecked())
             self.config.update(
                 start_with_windows=self.startup.isChecked(), start_minimized=self.minimized.isChecked()
@@ -339,10 +407,20 @@ class Window(QMainWindow):
         self.config.update(
             start_with_windows=self.startup.isChecked(), start_minimized=self.minimized.isChecked()
         )
-        set_startup(self.startup.isChecked())
         self.write_config()
+        try:
+            set_startup(self.startup.isChecked())
+        except OSError:
+            self.log_message(
+                "Settings saved. Windows startup registration could not be updated; connection is still available."
+            )
 
     def pair(self):
+        if self.config_error:
+            self.log_message(
+                "Reload the saved settings before pairing. Existing credentials have been preserved."
+            )
+            return
         if self.closing or (self.thread and self.thread.is_alive()):
             self.log_message("Disconnect and wait for sync to stop before pairing.")
             return
@@ -377,6 +455,7 @@ class Window(QMainWindow):
         else:
             self.config.update(result)
             self.code.clear()
+            self.update_pairing_status()
             try:
                 self.save()
             except (OSError, ValueError):
@@ -387,7 +466,7 @@ class Window(QMainWindow):
             self.log_message("Paired successfully. Click Save & connect to start archive sync.")
 
     def connect(self, checked=False, recovery=False):
-        if self.closing:
+        if self.closing or self.config_error:
             return
         if self.thread and self.thread.is_alive():
             self.log_message("Disconnect and wait for sync to stop before reconnecting.")
@@ -427,11 +506,9 @@ class Window(QMainWindow):
             self.started_at = time.monotonic()
             self.thread.start()
             self.log_message("Connecting and synchronizing archives…")
-        except (OSError, ValueError):
+        except (OSError, ValueError) as exc:
             self.desired = False
-            self.log_message(
-                "Could not connect. Check startup settings, server address and folder permissions."
-            )
+            self.log_message("Could not connect using saved settings: " + str(exc))
             self.show_settings()
 
     def disconnect(self):
@@ -468,8 +545,8 @@ class Window(QMainWindow):
                 self.tray.hide()
                 QApplication.quit()
             return
-        self.connect_button.setEnabled(not alive and not pairing)
-        self.pair_button.setEnabled(not alive and not pairing)
+        self.connect_button.setEnabled(not alive and not pairing and not self.config_error)
+        self.pair_button.setEnabled(not alive and not pairing and not self.config_error)
         if alive:
             if time.monotonic() - self.started_at > 600:
                 self.restarts = 0
@@ -563,6 +640,13 @@ def main():
                 None, "Quicker is running", "Open the existing companion from the system tray."
             )
         return
+    if not os.environ.get("QUICKER_STATE_DIR"):
+        try:
+            migrate_legacy_state(directory, legacy_state_directories(), QLockFile)
+        except (OSError, ValueError) as exc:
+            QMessageBox.warning(None, "Saved settings need attention", str(exc))
+            lock.unlock()
+            return
     server = QLocalServer()
     server.setSocketOptions(QLocalServer.UserAccessOption)
     QLocalServer.removeServer(name)  # Only the lock owner can remove a stale endpoint.

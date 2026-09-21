@@ -434,7 +434,28 @@ Quicker menu provide web access, manual refresh, pause/resume of automatic expor
 and Quit. Pause leaves document synchronization and explicitly requested operations
 available. Quit waits up to 15 seconds for workers; unfinished operations reconcile
 from their journals on restart. State and its revocable device credential live in
-`%LOCALAPPDATA%\Quicker`. No incoming Windows network port is needed.
+`%USERPROFILE%\.quicker`. No incoming Windows network port is needed.
+
+Open `client\dist\Quicker\Quicker.exe` (keep its `_internal` folder beside it).
+Launching from Explorer, a shortcut, or Windows sign-in uses the same per-user
+settings, independent of the working directory. The pairing code is temporary:
+after pairing, the app saves a device credential and reconnects with it on later
+launches. The **Paired** label confirms this; an empty **New pairing code** field
+does not mean pairing was lost. Server restarts normally do not require re-pairing.
+Re-pair only if the server rejects or revokes that device credential.
+
+Connection settings live in `%USERPROFILE%\.quicker\config.json`, with a validated
+`config.backup.json` recovery copy. Both contain the private device credential;
+keep them private. The client recovers the backup if the primary is missing or
+unreadable, and refuses to overwrite settings changed by another process. Use
+**Quicker > Reload saved settings** after disconnecting if recovery is needed.
+Upgrades replace the application folder and retain this per-user state directory.
+This profile-level location avoids Windows AppData virtualization when the EXE is
+launched from a packaged desktop host. On first use, the client migrates the saved
+pairing and all journals from the former AppData location, including the Codex
+private cache when present. The legacy copy is retained. Migration requires the
+old companion to be stopped and refuses ambiguous installations. Tests and special
+installations can explicitly set `QUICKER_STATE_DIR` to another state directory.
 
 To build a standalone Windows folder, run:
 

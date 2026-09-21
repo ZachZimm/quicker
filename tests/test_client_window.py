@@ -32,7 +32,12 @@ main()
 """
     result = subprocess.run(
         [sys.executable, "-c", code],
-        env={**os.environ, "QT_QPA_PLATFORM": "offscreen", "LOCALAPPDATA": str(tmp_path)},
+        env={
+            **os.environ,
+            "QT_QPA_PLATFORM": "offscreen",
+            "LOCALAPPDATA": str(tmp_path),
+            "QUICKER_STATE_DIR": str(tmp_path / "Quicker"),
+        },
         capture_output=True,
         check=False,
         text=True,

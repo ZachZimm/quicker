@@ -34,6 +34,32 @@ Windows installation the existing input directory and saved configuration were
 moved together from Documents to `C:\Users\kjole\OneDrive\Desktop\Quicker Input`;
 the archive location and pairing were retained.
 
+Settings persistence uses atomic UTF-8 writes and a validated `config.backup.json`
+next to `config.json`. Reads accept UTF-8/BOM and UTF-16 JSON. Missing or malformed
+primary settings recover from the backup; a failed read cannot silently overwrite
+existing pairing. A stale settings window must reload if the file changed on disk.
+The UI distinguishes a saved device credential from the short-lived pairing code
+and provides **Reload saved settings**. Launch diagnostics log the settings path
+and paired/recovered flags, never the credential. The executable's launch directory
+does not control where configuration or journals are stored.
+
+The canonical state directory is `%USERPROFILE%\.quicker`. Windows had redirected
+the original AppData state into the Codex package's private `LocalCache\Local\Quicker`
+directory, so Explorer launches saw a different, empty AppData view. The profile-level
+directory is shared by both launch contexts. Migration copies pairing, upload
+receipts and all desktop journals together while the legacy client is stopped,
+retains the old state, and publishes the new configuration only after copying the
+journals. Multiple distinct paired legacy installations require manual selection.
+
+Persistence validation on this Windows installation (2026-09-20): rebuilt the
+packaged EXE, opened it from Explorer, confirmed the restored server and Paired
+status, quit, and reopened it with automatic reconnection. The existing credential
+completed a server-requested native refresh (reference generation 20). Migration
+retained byte-identical copies of both SQLite journals. The selected regression
+run passed 97 tests; one server utility-extraction test still failed (expected two
+transactions, received zero). Client persistence, lifecycle and migration checks
+passed. No new pairing or Linux deployment was required.
+
 The current export changes retain the 15-minute interval, defer background
 exports while the foreground window covers its monitor, and restore the previous
 application after automatic exports. Restoration respects user input, application
@@ -239,6 +265,6 @@ checks do not establish native focus, tray, startup or shutdown behavior. Record
 the Windows and Quicken versions used for the new acceptance checks.
 
 Build on Windows with `client/build.ps1`, supplying `-PythonPath` if needed.
-Install the entire `client/dist/Quicker` folder. Preserve `%LOCALAPPDATA%/Quicker`,
+Install the entire `client/dist/Quicker` folder. Preserve `%USERPROFILE%/.quicker`,
 which holds pairing, configuration and durable journals. Keep server and client
 versions compatible; server deployment instructions remain in README.md.

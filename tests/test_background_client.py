@@ -172,7 +172,7 @@ app.setQuitOnLastWindowClosed(False)
 module.set_startup = Mock()
 root = module.state_directory()
 root.mkdir(parents=True)
-(root / 'config.json').write_text(json.dumps({'token': 'private-token', 'start_with_windows': False}))
+(root / 'config.json').write_text(json.dumps({'server': 'http://server', 'token': 'private-token', 'start_with_windows': False}))
 window = module.Window(auto_connect=False)
 window.tray.isVisible = lambda: True
 window.show_initial()
@@ -233,7 +233,12 @@ print('Lifecycle controls passed')
 """
     result = subprocess.run(
         [sys.executable, "-c", code],
-        env={**os.environ, "QT_QPA_PLATFORM": "offscreen", "LOCALAPPDATA": str(tmp_path)},
+        env={
+            **os.environ,
+            "QT_QPA_PLATFORM": "offscreen",
+            "LOCALAPPDATA": str(tmp_path),
+            "QUICKER_STATE_DIR": str(tmp_path / "Quicker"),
+        },
         capture_output=True,
         text=True,
         timeout=20,
