@@ -383,8 +383,13 @@ interrupted downloads, and acknowledges archive copies only after checksums matc
 Unsupported files remain in the input folder. Archives and input folders cannot
 contain one another. Archive downloads never feed back into ingestion.
 
-Closing the window keeps sync running in the tray when supported. Use the tray's
-Quit action to stop. State and its revocable device credential live in
+Paired installations start with Windows and minimized to the tray by default;
+both preferences are available in settings. Closing the window keeps sync running.
+Launch again or double-click the tray icon to open settings. The tray and window's
+Quicker menu provide web access, manual refresh, pause/resume of automatic exports,
+and Quit. Pause leaves document synchronization and explicitly requested operations
+available. Quit waits up to 15 seconds for workers; unfinished operations reconcile
+from their journals on restart. State and its revocable device credential live in
 `%LOCALAPPDATA%\Quicker`. No incoming Windows network port is needed.
 
 To build a standalone Windows folder, run:
@@ -395,8 +400,8 @@ To build a standalone Windows folder, run:
 
 Distribute the entire `client/dist/Quicker` folder, including `Quicker.exe`.
 Packaging must run on Windows. The supported Quicken version, deployment notes,
-and proposed background behavior are documented in the
-[Windows client plan](WINDOWS_BACKGROUND_CLIENT.md).
+and background behavior are documented in the
+[Windows client guide](WINDOWS_BACKGROUND_CLIENT.md).
 
 ## Persistent deployment and backups
 

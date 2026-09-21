@@ -38,6 +38,12 @@ class Operations:
     def call(self, path, **body):
         return self.client.request("POST", path, json={"owner": self.owner, **body})
 
+    def notify(self, key, message=None):
+        if message:
+            getattr(self.client, "attention", lambda *args: None)(key, message)
+        else:
+            getattr(self.client, "resolve_attention", lambda *args: None)(key)
+
     def start(self, kind, background=False, request_id=None):
         return self.client.request(
             "POST",
@@ -91,7 +97,11 @@ class Operations:
         ):
             raise RuntimeError("Server did not acknowledge the exact fresh export")
         if receipt["status"] != "active":
+            self.notify("reference", "Quicken reference requires review. Open the web interface.")
             raise RuntimeError(receipt.get("message") or "Export requires review before entry")
+        self.notify("reference")
+        self.put("last_successful_export", saved["metadata"]["completed"])
+        getattr(self.client, "export_completed", lambda _: None)(saved["metadata"]["completed"])
         return receipt
 
     def account_refresh(self):
@@ -101,12 +111,26 @@ class Operations:
         run = self.start("refresh")
         if run["kind"] != "refresh":
             raise DesktopUnavailable("Finish the active transaction operation before creating an account")
-        result = self.process(run)
+        result = self.process(run, manual=True)
         if not result or result["status"] != "complete":
             raise DesktopUnavailable("Account creation requires a completed fresh Quicken export")
         return result["latest_event"]
 
     def process_account(self, request):
+        key = "account:" + request["id"]
+        try:
+            result = self._process_account(request)
+            self.notify(key)
+            return result
+        except Exception:
+            saved = self.get(key) or {}
+            if saved.get("phase") in ("attempting", "submitted"):
+                self.notify(
+                    key, "Account creation needs verification. Open the web interface; do not recreate it."
+                )
+            raise
+
+    def _process_account(self, request):
         from .qif import render_account
 
         if request["file_identity"] != self.adapter.identity:
@@ -157,17 +181,18 @@ class Operations:
         self.client.report("Account verified in Quicken: " + request["name"])
         return result
 
-    def process(self, run):
+    def process(self, run, *, manual=False):
         if run["file_identity"] != self.adapter.identity:
             raise DesktopUnavailable("This run requires a different configured Quicken file")
         # Readiness failures leave the request queued, allowing a closed dialog or idle desktop to recover.
-        self.adapter.ready(background=run.get("background", False))
+        background = run.get("background", False) and not manual
+        self.adapter.ready(background=background)
         run = self.call(f"/api/device/operations/{run['id']}/take")
         base = f"/api/device/operations/{run['id']}"
         key = run["id"] + ":phase"
         phase = self.get(key)
         try:
-            with self.adapter.session(background=run.get("background", False)):
+            with self.adapter.session(background=background):
                 if self.client.stop.is_set():
                     return
                 if run["kind"] == "refresh":
@@ -188,6 +213,10 @@ class Operations:
                             self.put(key, "attempting")
                             self.put("attempt:" + item["id"], {"started": time(), "item": item})
                             self.call(base + "/items/" + item["id"] + "/attempt")
+                            if self.client.stop.is_set():
+                                raise DesktopUnavailable(
+                                    "Disconnected before submission; reconcile the attempt"
+                                )
 
                         self.adapter.enter(item, self.directory / "imports", before_submit)
                     self.put(key, "post")
@@ -200,10 +229,20 @@ class Operations:
                 result = self.call(base + "/reconcile", event_id=receipt["id"])
                 self.put(key, "finished")
                 self.client.report(result["message"])
+                if result["status"] == "needs_review":
+                    self.notify(
+                        run["id"], "Transaction outcome needs review. Open the web interface to reconcile."
+                    )
+                else:
+                    self.notify(run["id"])
                 for skipped in result.get("skipped", []):
                     self.client.report("Not entered: " + skipped["reason"])
                 return result
         except Exception as exc:
+            if run["kind"] != "refresh" and self.get(key) in ("claiming", "claimed", "attempting", "post"):
+                self.notify(
+                    run["id"], "Entry stopped with an uncertain outcome. Open the web interface to reconcile."
+                )
             self.client.report("Quicken operation stopped: " + str(exc))
             try:
                 self.call(base + "/stop", message=str(exc)[:1000])

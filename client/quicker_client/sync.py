@@ -15,8 +15,18 @@ from uuid import uuid4
 
 import httpx
 
+from .lifecycle import Backoff
+
 SUPPORTED = {".jpg", ".jpeg", ".png", ".heic", ".heif"}
 AUTO_EXPORT_INTERVAL_SECONDS = 15 * 60
+
+
+class PairingRevoked(RuntimeError):
+    pass
+
+
+class ServerUnavailable(RuntimeError):
+    pass
 
 
 def checksum(path):
@@ -42,6 +52,7 @@ class Companion:
         qif_path=None,
         data_file=None,
         status_report=lambda status: None,
+        auto_exports_paused=False,
     ):
         self.input_dir, self.archive_dir = Path(input_dir).resolve(), Path(archive_dir).resolve()
         if (
@@ -75,7 +86,22 @@ class Companion:
         self.stable = {}
         self.stop = threading.Event()
         self.status_report = status_report
+        self.status_lock = threading.RLock()
+        self.status = {
+            "connected": False,
+            "desktop": False,
+            "waiting": "Connecting",
+            "paused": auto_exports_paused,
+            "last_export": None,
+            "attention": None,
+        }
+        self.auto_exports_paused = threading.Event()
+        if auto_exports_paused:
+            self.auto_exports_paused.set()
+        self.fatal_reason = None
+        self.heartbeat_error = None
         self.commands = queue.Queue()
+        self.manual_runs = set()
         self.operations = None
         self.protocol = 0
         self.last_refresh = 0
@@ -86,12 +112,42 @@ class Companion:
             from .operations import Operations
 
             self.operations = Operations(self, WindowsQuicken(data_file), state_dir)
+            self.status["last_export"] = self.operations.get("last_successful_export")
+
+    def update_status(self, **values):
+        with self.status_lock:
+            changed = any(self.status.get(key) != value for key, value in values.items())
+            self.status.update(values)
+            if changed:
+                self.status_report(dict(self.status))
+
+    def pause_exports(self, paused):
+        self.auto_exports_paused.set() if paused else self.auto_exports_paused.clear()
+        self.update_status(
+            paused=paused, waiting="Automatic exports paused" if paused else "Waiting for idle desktop"
+        )
+
+    def export_completed(self, completed):
+        self.update_status(last_export=completed, waiting="")
+
+    def attention(self, key, message):
+        self.update_status(attention={"key": key, "message": message} if key else None)
+
+    def resolve_attention(self, key):
+        with self.status_lock:
+            if (self.status.get("attention") or {}).get("key") == key:
+                self.update_status(attention=None)
 
     def command(self, kind):
-        self.commands.put((kind, str(uuid4())))
+        if not self.stop.is_set() and self.commands.qsize() < 1:
+            self.commands.put((kind, str(uuid4())))
 
     def request(self, method, path, **kwargs):
         response = self.http.request(method, path, **kwargs)
+        if response.status_code in (401, 403):
+            raise PairingRevoked("Pairing no longer accepted. Pair this companion again in settings.")
+        if response.status_code >= 500 or response.status_code == 429:
+            raise ServerUnavailable("Server temporarily unavailable; reconnecting automatically")
         if response.is_error:
             try:
                 detail = response.json().get("detail", response.status_code)
@@ -115,24 +171,44 @@ class Companion:
                 body.update(ready=True, message="Quicken ready")
             except Exception as exc:  # noqa: BLE001 - COM/Win32 readiness errors must not terminate archive sync
                 body.update(ready=False, message=str(exc))
-        result = self.request("POST", "/api/device/heartbeat", json=body)
+        result = self.request("POST", "/api/device/heartbeat", json=body, timeout=15)
         self.protocol = result.get("protocol", 0)
-        self.status_report(
-            {"connected": True, "desktop": bool(self.operations) and self.protocol == 1, **result}
+        status = {"connected": True, "desktop": bool(self.operations) and self.protocol == 1}
+        status["readiness"] = (
+            "" if body.get("ready") else body.get("message", "Configure the Quicken data file")
         )
+        self.update_status(**status)
         return result
 
     def desktop_cycle(self):
-        if not self.operations or self.protocol != 1:
+        if self.stop.is_set() or not self.operations or self.protocol != 1:
             return
         ops = self.operations
+        while not self.commands.empty() and not self.stop.is_set():
+            kind, request_id = self.commands.get_nowait()
+            try:
+                run = ops.start(kind, request_id=request_id)
+                self.manual_runs.add(run["id"])
+            except Exception:
+                self.commands.put((kind, request_id))
+                raise
         pending = self.request("GET", "/api/device/operations")
+        self.manual_runs.intersection_update(run["id"] for run in pending)
         for run in pending:
             if self.stop.is_set():
                 return
-            ops.process(run)
+            if run["id"] in self.manual_runs:
+                ops.process(run, manual=True)
+            elif not (run.get("background") and self.auto_exports_paused.is_set()):
+                ops.process(run)
+            else:
+                continue
             self.last_refresh = time.time()
         accounts = self.request("GET", "/api/device/account-requests")
+        active_ids = {account["id"] for account in accounts}
+        self.account_retries = {
+            key: value for key, value in self.account_retries.items() if key in active_ids
+        }
         # Recover an in-flight creation before claiming any later request.
         accounts.sort(key=lambda item: (item["status"] != "creating", item["created"]))
         if accounts and not self.stop.is_set():
@@ -141,24 +217,22 @@ class Companion:
                 self.account_retries[account["id"]] = time.time() + 60
                 ops.process_account(account)
                 self.last_refresh = time.time()
-        while not self.commands.empty():
-            kind, request_id = self.commands.get_nowait()
-            try:
-                ops.start(kind, request_id=request_id)
-            except Exception:
-                self.commands.put((kind, request_id))
-                raise
         pending = self.request("GET", "/api/device/operations")
-        if not pending and not accounts and time.time() - self.last_refresh > AUTO_EXPORT_INTERVAL_SECONDS:
+        if self.stop.is_set():
+            return
+        if (
+            not pending
+            and not accounts
+            and not self.auto_exports_paused.is_set()
+            and time.time() - self.last_refresh > AUTO_EXPORT_INTERVAL_SECONDS
+        ):
             # Background exports wait for an idle desktop without a fullscreen app.
             ops.adapter.ready(background=True)
-            pending = [ops.start("refresh", background=True)]
+            run = ops.start("refresh", background=True)
             self.last_refresh = time.time()
-        for run in pending:
-            if self.stop.is_set():
-                return
-            ops.process(run)
-            self.last_refresh = time.time()
+            if not self.stop.is_set():
+                ops.process(run)
+        self.update_status(waiting="Automatic exports paused" if self.auto_exports_paused.is_set() else "")
 
     def ingest_file(self, source):
         source = Path(source)
@@ -300,17 +374,27 @@ class Companion:
         try:
             self.desktop_cycle()
             self.last_desktop_message = None
+        except (PairingRevoked, ServerUnavailable, httpx.HTTPError):
+            raise
         except Exception as exc:  # noqa: BLE001 - desktop adapter faults are isolated from archival
             message = "Quicken: " + str(exc)
             if message != self.last_desktop_message:
                 self.report(message)
                 self.last_desktop_message = message
+            self.update_status(waiting=message)
         try:
             self.sync_export()
-        except (OSError, RuntimeError, ValueError, sqlite3.Error, httpx.HTTPError):
+        except (PairingRevoked, ServerUnavailable, httpx.HTTPError):
+            raise
+        except (OSError, RuntimeError, ValueError, sqlite3.Error):
             self.report("QIF sync failed. Check the export file and connection; the next cycle will retry.")
 
-        for source in sorted(self.input_dir.iterdir()):
+        sources = sorted(self.input_dir.iterdir())
+        retained = {str(source) for source in sources}
+        if self.qif_path:
+            retained.add(str(self.qif_path))
+        self.stable = {key: value for key, value in self.stable.items() if key in retained}
+        for source in sources:
             if self.stop.is_set():
                 return
             if (
@@ -325,7 +409,9 @@ class Companion:
             if self.stable.get(str(source)) == stamp:
                 try:
                     self.ingest_file(source)
-                except (OSError, RuntimeError, ValueError, sqlite3.Error, httpx.HTTPError):
+                except (PairingRevoked, ServerUnavailable, httpx.HTTPError):
+                    raise
+                except (OSError, RuntimeError, ValueError, sqlite3.Error):
                     self.report(
                         f"Could not archive {source.name}. Check image format and folder access; the input is retained for retry."
                     )
@@ -337,35 +423,61 @@ class Companion:
 
     def run(self):
         def pulse():
-            while not self.stop.is_set():
-                try:
-                    status = self.heartbeat()
-                    self.report(
-                        f"Connected · {status['approved']} approved · "
-                        + (
-                            "Quicken automation available"
-                            if self.operations and self.protocol == 1
-                            else "Configure the Quicken file and update the server for entry"
+            backoff = Backoff()
+            try:
+                while not self.stop.is_set():
+                    try:
+                        self.heartbeat()
+                        backoff.reset()
+                        delay = 10
+                    except PairingRevoked:
+                        self.revoked()
+                        return
+                    except (ServerUnavailable, httpx.HTTPError, OSError):
+                        self.update_status(
+                            connected=False, desktop=False, waiting="Server unavailable; retrying"
                         )
-                    )
-                except (OSError, RuntimeError, ValueError, sqlite3.Error, httpx.HTTPError):
-                    self.status_report({"connected": False, "desktop": False})
-                    self.report(
-                        "Connection unavailable. Check the server address or pair again if access was revoked."
-                    )
-                self.stop.wait(10)
+                        delay = backoff.next()
+                    self.stop.wait(delay)
+            except Exception as exc:  # noqa: BLE001 - report heartbeat death to the supervisor
+                self.heartbeat_error = type(exc).__name__
+                self.stop.set()
 
         heartbeat_thread = threading.Thread(target=pulse, daemon=True)
         heartbeat_thread.start()
+        backoff = Backoff()
         try:
             while not self.stop.is_set():
                 try:
                     self.cycle()
-                except (OSError, RuntimeError, ValueError, sqlite3.Error, httpx.HTTPError):
-                    self.report(
-                        "Archive sync interrupted. Check the connection and folder access; originals are retained for retry."
-                    )
-                self.stop.wait(5)
+                    backoff.reset()
+                    delay = 5
+                except PairingRevoked:
+                    self.revoked()
+                    break
+                except (ServerUnavailable, httpx.HTTPError) as exc:
+                    if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code in (401, 403):
+                        self.revoked()
+                        break
+                    self.update_status(connected=False, desktop=False, waiting="Server unavailable; retrying")
+                    delay = backoff.next()
+                except (OSError, RuntimeError, ValueError, sqlite3.Error):
+                    self.update_status(waiting="Archive sync interrupted; check folders and connection")
+                    delay = backoff.next()
+                if not heartbeat_thread.is_alive() and not self.stop.is_set():
+                    raise RuntimeError("Heartbeat worker exited unexpectedly")
+                self.stop.wait(delay)
         finally:
-            heartbeat_thread.join(timeout=190)
+            self.stop.set()
+            # Own the HTTP client until BOTH workers have stopped. The GUI has a
+            # separate bounded shutdown deadline and never closes an in-use client.
+            heartbeat_thread.join()
             self.http.close()
+        if self.heartbeat_error:
+            raise RuntimeError("Heartbeat worker stopped unexpectedly: " + self.heartbeat_error)
+
+    def revoked(self):
+        self.fatal_reason = "pairing"
+        self.update_status(connected=False, desktop=False, waiting="Pairing required")
+        self.attention("pairing", "Pairing no longer accepted. Open settings to pair again.")
+        self.stop.set()

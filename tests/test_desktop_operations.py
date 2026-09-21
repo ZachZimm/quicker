@@ -313,6 +313,33 @@ def test_controller_restart_reconciles_without_replaying(tmp_path, auth, db, dev
         assert s.get(Candidate, row).status == ("review" if lost_claim else "entered")
 
 
+def test_shutdown_during_attempt_response_prevents_submit_and_reconciles(tmp_path, auth, db, device):
+    candidate(db)
+    api = ApiCompanion(auth, device)
+    adapter = FakeQuicken()
+    original = api.request
+
+    def request(method, path, **kwargs):
+        result = original(method, path, **kwargs)
+        if path.endswith("/attempt"):
+            api.stop.set()
+        return result
+
+    api.request = request
+    ops = Operations(api, adapter, tmp_path)
+    with pytest.raises(RuntimeError, match="Disconnected before submission"):
+        ops.process(ops.start("entry"))
+    assert adapter.submissions == 0
+    api.stop.clear()
+    api.request = original
+    recovered = Operations(api, adapter, tmp_path)
+    assert recovered.owner == ops.owner
+    # The server cannot prove whether submission happened before shutdown. Keep
+    # the missing attempted item in review, and never submit it on recovery.
+    assert recovered.process(recovered.start("refresh"))["status"] == "needs_review"
+    assert adapter.submissions == 0
+
+
 def test_qif_input_validation():
     item = {
         "id": str(uuid4()),

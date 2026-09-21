@@ -1,4 +1,4 @@
-# Windows background client plan
+# Windows background client
 
 ## Goal and current state
 
@@ -6,12 +6,27 @@ Keep the companion running throughout the user's signed-in Windows session,
 usually with no visible window. The browser remains the main review interface;
 the companion handles document synchronization and Quicken desktop operations.
 
-The startup, tray, notification and lifecycle changes below are proposed work.
-They have not yet been implemented. The existing client already has a tray icon,
-hides its window on close when the tray is available, connects with saved pairing
-credentials, and prevents a second instance from starting. It still opens its
-window on launch, shows a message for duplicate launches, keeps an unbounded
-activity log, and quits immediately without waiting for its background threads.
+The startup, tray, notification and lifecycle changes below are implemented.
+Paired installations default to current-user Windows sign-in startup and a hidden
+tray window; both settings can be disabled. First-run setup or an unavailable tray
+keeps the window accessible. Relaunch opens the existing instance through a local
+socket restricted to the current user. The same controls are available in the
+window's Quicker menu and the tray menu; only double-click opens the tray window.
+
+Pause is saved and affects periodic exports only. Status includes connection,
+desktop waiting reason and the last verified native export. Routine conditions do
+not produce notifications. Pairing rejection and uncertain operations notify once
+per active condition, with a click opening settings or the web interface.
+
+Network retries back off from 5 to 60 seconds. Unexpected worker exits stop both
+workers before recovery, with at most three automatic restarts (5, 15, 60 seconds)
+until a manual reconnect or ten minutes of continued operation. Explicit Quit
+never restarts the application. Shutdown waits responsively for up to 15 seconds;
+unfinished attempts retain their journals for reconciliation. The activity view
+retains 500 blocks. `companion.log` rotates at 1 MiB with three backups in the state
+directory, and credentials are redacted. Startup registration is the `Quicker`
+value under the current user's Windows `Run` key; it points at the installed
+executable with `--startup`. Launch after moving the installation updates that path.
 
 The current export changes retain the 15-minute interval, defer background
 exports while the foreground window covers its monitor, and restore the previous
@@ -159,6 +174,19 @@ the application's lifecycle.
 
 ## Windows validation and deployment
 
+### Background lifecycle validation
+
+On the same Windows 11/Quicken installation, the rebuilt executable started hidden
+with saved pairing, registered current-user startup, and reopened the same process
+on a second launch. Closing settings kept the process running. Native automatic
+exports completed; a server-requested refresh also completed while automatic
+exports were paused (reference generation 14). Pause/resume and explicit Quit were
+exercised through the shared window/tray menu. Quit stopped the process without an
+automatic restart. Existing configuration and journals were retained. The full
+suite passed 235 tests, including fault-injected shutdown/recovery, and Ruff passed.
+Actual Windows sign-out/sign-in, sleep/wake, multi-monitor games, and overnight
+operation were not exercised during this deployment.
+
 ### September 20, 2026 validation
 
 Validated upstream `48d8b5e` on Windows 11 Home, build 26200, with English Quicken
@@ -180,7 +208,10 @@ After rebuilding the web assets, the full Windows suite passed (222 tests), alon
 with the two added activation regressions. Ruff, TypeScript, the Vite production
 build, and Windows packaging passed. Multi-monitor/fullscreen-game, lock/wake,
 overnight, startup, and tray-lifecycle acceptance checks are not established by
-this run; the proposed lifecycle work above remains unimplemented.
+this earlier run. The subsequent lifecycle implementation adds automated coverage
+for hidden/visible startup decisions, tray activation, pause with uploads and
+explicit refresh, bounded logs, worker failures, notification deduplication,
+shutdown deadlines, and shutdown after an attempt acknowledgement without replay.
 
 Rebuilt and restarted `client/dist/Quicker/Quicker.exe` with existing pairing,
 configuration and journals preserved. The packaged client connected to the
