@@ -1,11 +1,19 @@
 import { useEffect, useState } from "react";
-import { api } from "./api";
+import { api, post } from "./api";
 import type { DocumentRecord } from "./api";
 
 type AnalysisStatus = {
   worker: { online: boolean; last_seen: number | null; capacity: number };
   queue: { waiting: number; analyzing: number; retrying: number };
-  model: { state: string; message: string; checked_at: number; name: string };
+  model: {
+    state: string;
+    message: string;
+    checked_at: number;
+    name: string;
+    retry_at?: number | null;
+    last_success?: number | null;
+    recovering?: boolean;
+  };
 };
 
 export function useAnalysisStatus(enabled: boolean) {
@@ -52,14 +60,22 @@ export function waitingReason(
   if (doc.status === "extracting" && status && !status.worker.online)
     return "No recent worker heartbeat. Analysis may be interrupted; the worker will recover it automatically when available.";
   if (doc.status !== "queued") return null;
+  if (doc.analysis?.recovering)
+    return "A model recovery check is running. This document will follow automatically if it succeeds.";
+  if (doc.analysis?.waiting_reason)
+    return `${doc.analysis.waiting_reason} ${
+      doc.analysis.retry_at && doc.analysis.retry_at > Date.now() / 1000
+        ? `Next recovery check after ${new Date(doc.analysis.retry_at * 1000).toLocaleTimeString()}.`
+        : "Waiting for the next recovery check."
+    }`;
   if (doc.analysis?.retry_at && doc.analysis.retry_at > Date.now() / 1000)
-    return `Analysis will retry automatically after ${new Date(doc.analysis.retry_at * 1000).toLocaleTimeString()}.`;
+    return `${doc.error ? doc.error + " " : ""}Analysis will retry automatically after ${new Date(doc.analysis.retry_at * 1000).toLocaleTimeString()}.`;
   if (!status)
     return "Checking analysis availability. Your document is saved and will be analyzed automatically.";
   if (!status.worker.online)
     return "No recent worker heartbeat. Analysis will start automatically when the worker is available.";
-  if (status.model.state === "unreachable")
-    return "The model connection needs attention. The worker will attempt analysis automatically.";
+  if (status.model.state !== "connected" && status.model.state !== "unknown")
+    return `${status.model.message} Your document is saved.`;
   if (status.queue.analyzing >= status.worker.capacity)
     return "The worker is analyzing other documents. This document will start when a slot is available.";
   return "The worker will pick up this document automatically.";
@@ -70,6 +86,8 @@ export function AnalysisStatusPanel({
   error,
   onSettings,
 }: ReturnType<typeof useAnalysisStatus> & { onSettings: () => void }) {
+  const [retrying, setRetrying] = useState(false);
+  const [retryMessage, setRetryMessage] = useState("");
   return (
     <section className="analysis-status" aria-label="Document analysis status">
       <div>
@@ -99,11 +117,16 @@ export function AnalysisStatusPanel({
                   }
                 />{" "}
                 Model connection:{" "}
-                {status.model.state === "connected"
-                  ? "Connected"
-                  : status.model.state === "unreachable"
-                    ? "Needs attention"
-                    : "Not verified"}
+                {{
+                  connected: "Connected",
+                  unreachable: "Unreachable",
+                  offline: "Offline",
+                  loading: "Loading",
+                  busy: "Busy",
+                  timeout: "Timed out",
+                  memory: "Memory unavailable",
+                  configuration_error: "Settings need attention",
+                }[status.model.state] || "Not verified"}
               </span>
               <span>
                 {status.queue.waiting} waiting · {status.queue.analyzing}{" "}
@@ -119,6 +142,25 @@ export function AnalysisStatusPanel({
             {status.model.state !== "connected" && (
               <p>{status.model.message}</p>
             )}
+            {status.model.recovering ? (
+              <p>
+                Checking recovery with one document. Other documents remain
+                queued.
+              </p>
+            ) : status.model.retry_at &&
+              status.model.retry_at > Date.now() / 1000 ? (
+              <p>
+                Next recovery check after{" "}
+                {new Date(status.model.retry_at * 1000).toLocaleTimeString()}.
+              </p>
+            ) : null}
+            <p>
+              Last successful analysis:{" "}
+              {status.model.last_success
+                ? new Date(status.model.last_success * 1000).toLocaleString()
+                : "None recorded yet"}
+              .
+            </p>
             <details>
               <summary>Connection details</summary>
               <p>
@@ -133,8 +175,33 @@ export function AnalysisStatusPanel({
             </details>
           </>
         )}
+        {retryMessage && <p role="status">{retryMessage}</p>}
       </div>
-      <button onClick={onSettings}>Model settings</button>
+      <div className="actions">
+        {!!status?.queue.waiting && (
+          <button
+            disabled={retrying || status.model.recovering}
+            onClick={async () => {
+              setRetrying(true);
+              try {
+                await post("/analysis/retry");
+                setRetryMessage(
+                  "Retry requested. Any server-requested waiting period still applies.",
+                );
+              } catch (error) {
+                setRetryMessage(
+                  error instanceof Error ? error.message : String(error),
+                );
+              } finally {
+                setRetrying(false);
+              }
+            }}
+          >
+            {retrying ? "Requesting retry…" : "Retry now"}
+          </button>
+        )}
+        <button onClick={onSettings}>Model settings</button>
+      </div>
     </section>
   );
 }

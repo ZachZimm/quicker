@@ -1378,8 +1378,8 @@ function Documents({
                 )}
                 {doc.analysis && !doc.analysis.uses_current_settings && (
                   <p className="missing">
-                    This analysis uses earlier model settings. Analyze again
-                    after it finishes to use the current settings.
+                    This analysis uses earlier model settings. Analyze again to
+                    use the current settings.
                   </p>
                 )}
                 <h3>{doc.name}</h3>
@@ -1393,7 +1393,9 @@ function Documents({
                     This image was uploaded more than once.
                   </p>
                 )}
-                {doc.error && <p className="field-error">{doc.error}</p>}
+                {doc.error && doc.status !== "queued" && (
+                  <p className="field-error">{doc.error}</p>
+                )}
                 <button
                   onClick={() => {
                     setActiveId(doc.id);
@@ -1435,7 +1437,9 @@ function Documents({
             {waitingReason(active, analysis) && (
               <p>{waitingReason(active, analysis)}</p>
             )}
-            {active.error && <p className="field-error">{active.error}</p>}
+            {active.error && active.status !== "queued" && (
+              <p className="field-error">{active.error}</p>
+            )}
             <SourceViewer doc={active} />
             <DocumentCorrections key={active.id} doc={active} run={run} />
             {active.ignored.length > 0 && (
@@ -1460,7 +1464,9 @@ function Documents({
               >
                 Analysis history
               </button>
-              {["failed", "ready"].includes(active.status) && (
+              {(["failed", "ready"].includes(active.status) ||
+                (active.status === "queued" &&
+                  !active.analysis?.uses_current_settings)) && (
                 <button
                   disabled={reanalyzing}
                   onClick={async () => {

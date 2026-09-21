@@ -73,6 +73,7 @@ def test_default_migration_preserves_overrides_and_entered_rows(db):
     with db.write() as session:
         session.get(Candidate, entered).status = "entered"
         session.execute(text("DROP TABLE account_requests"))
+        session.execute(text("ALTER TABLE jobs DROP COLUMN resource_failures"))
         session.execute(text("UPDATE alembic_version SET version_num='d9345c12b233'"))
     db.migrate()
     with db.session() as session:
@@ -259,7 +260,7 @@ def test_register_searchable_choices_and_confirmed_account_creation(browser_url,
         expect(dialog.get_by_role("combobox")).to_have_count(0)
         expect(dialog).to_contain_text("Bank account")
         assert auth.get("/api/catalog").json()["account_requests"] == []
-        dialog.get_by_role("button", name="Close account creation", exact=True).click()
+        page.locator(".modal-overlay").click(position={"x": 5, "y": 5})
         expect(dialog).to_have_count(0)
         expect(cell(row, "account")).to_contain_text("2026 Example St.")
         edit(row, "account", "2028 New Rental")

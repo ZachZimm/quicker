@@ -132,6 +132,8 @@ export type DocumentRecord = {
   analysis?: {
     attempts: number;
     retry_at: number | null;
+    waiting_reason?: string | null;
+    recovering?: boolean;
     uses_current_settings: boolean;
   } | null;
 };

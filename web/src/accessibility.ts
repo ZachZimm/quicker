@@ -1,10 +1,31 @@
 import { useEffect } from "react";
 
-// Keep keyboard focus inside the active modal, restore it on close, and support Escape.
+// Keep focus inside the active dialog; Escape and backdrop clicks use its close action.
 export function useDialogKeyboard() {
   useEffect(() => {
     let current: HTMLElement | null = null;
     let previous: HTMLElement | null = null;
+    let pointerStart: EventTarget | null = null;
+    const close = () =>
+      current
+        ?.querySelector<HTMLButtonElement>(
+          'button[aria-label^="Close"]:not(:disabled)',
+        )
+        ?.click();
+    const pointerdown = (event: PointerEvent) => {
+      pointerStart = event.target;
+    };
+    const click = (event: MouseEvent) => {
+      const target = event.target;
+      if (
+        target === pointerStart &&
+        target instanceof HTMLElement &&
+        target === current?.parentElement &&
+        target.matches(".modal-overlay, .drawer-overlay")
+      )
+        close();
+      pointerStart = null;
+    };
     const focusable = () =>
       current
         ? [
@@ -33,11 +54,7 @@ export function useDialogKeyboard() {
     const keydown = (event: KeyboardEvent) => {
       if (!current) return;
       if (event.key === "Escape") {
-        current
-          .querySelector<HTMLButtonElement>(
-            'button[aria-label^="Close"]:not(:disabled)',
-          )
-          ?.click();
+        close();
       }
       if (event.key === "Tab") {
         const items = focusable();
@@ -57,9 +74,13 @@ export function useDialogKeyboard() {
       }
     };
     document.addEventListener("keydown", keydown);
+    document.addEventListener("pointerdown", pointerdown);
+    document.addEventListener("click", click);
     return () => {
       observer.disconnect();
       document.removeEventListener("keydown", keydown);
+      document.removeEventListener("pointerdown", pointerdown);
+      document.removeEventListener("click", click);
     };
   }, []);
 }

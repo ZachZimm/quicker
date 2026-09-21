@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, select, update
 
+from . import model_availability
 from .accounts import install as install_accounts
 from .accounts import pending_accounts
 from .analysis_status import ModelConnection, worker_status
@@ -234,7 +235,19 @@ def create_app(database=None):
         with db.session() as session:
             config = model_settings(session)
             status = worker_status(session)
-        return {**status, "model": model_connection.status(config)}
+            availability = model_availability.status(session, config)
+        model = model_connection.status(config)
+        if availability["reason"]:
+            model = {**model, "state": availability["reason"], "message": availability["message"]}
+        return {**status, "model": {**model, **{k: v for k, v in availability.items() if k != "message"}}}
+
+    @app.post("/api/analysis/retry")
+    def retry_waiting_analysis(auth: Auth):
+        with db.write() as session:
+            for job in session.scalars(select(Job).where(Job.status == "queued")):
+                model_availability.retry_now(session, ModelConfig.model_validate(job.config))
+                job.available = 0
+        return {"ok": True}
 
     @app.put("/api/settings")
     def save_settings(body: ModelConfig, auth: Auth):
@@ -405,11 +418,7 @@ def create_app(database=None):
                     "created": d.created,
                     "error": d.error,
                     "ignored": d.ignored,
-                    "analysis": {
-                        "attempts": active_jobs[d.id].attempts,
-                        "retry_at": active_jobs[d.id].available if d.status == "queued" else None,
-                        "uses_current_settings": active_jobs[d.id].config.get("revision") == config_revision,
-                    } if d.id in active_jobs else None,
+                    "analysis": model_availability.job_status(session, active_jobs.get(d.id), config_revision),
                     "pages": [serialize_page(p) for p in all_pages if p.document_id == d.id],
                     "repeated_content": any(counts[p.sha256] > 1 for p in all_pages if p.document_id == d.id),
                 }
@@ -449,8 +458,18 @@ def create_app(database=None):
             doc = session.get(Document, document_id)
             if not doc:
                 raise HTTPException(404, "Document not found")
-            if doc.status not in ("failed", "ready"):
+            if doc.status not in ("failed", "ready", "queued"):
                 raise HTTPException(409, "Document is already queued or processing")
+            if doc.status == "queued":
+                job = session.scalar(select(Job).where(Job.document_id == doc.id, Job.status == "queued"))
+                if not job:
+                    raise HTTPException(409, "Analysis state changed. Reload before retrying.")
+                config = model_settings(session)
+                job.config = config.model_dump()
+                job.attempts, job.resource_failures, job.available = 0, 0, 0
+                model_availability.retry_now(session, config)
+                doc.error = None
+                return {"ok": True}
             doc.status, doc.error = "queued", None
             session.add(
                 Job(

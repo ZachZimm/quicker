@@ -45,13 +45,13 @@ def test_analysis_status_authenticated_cached_and_redacts_provider_errors(auth, 
     assert first.status_code == 200
     assert first.json()["model"]["state"] == "connected"
     assert auth.get("/api/analysis-status").json() == first.json()
-    assert len(requests) == 1
+    assert len(requests) == 2  # Model listing and Bonsai health; both are cached.
     config = auth.get("/api/settings").json()
     config.pop("has_api_key")
     config["api_key"] = "private-test-key"
     assert auth.put("/api/settings", json=config).status_code == 200
     assert auth.get("/api/analysis-status").status_code == 200
-    assert len(requests) == 2
+    assert len(requests) == 4
     assert requests[-1].headers["Authorization"] == "Bearer private-test-key"
     assert "private-test-key" not in auth.get("/api/analysis-status").text
     auth.post("/api/logout")

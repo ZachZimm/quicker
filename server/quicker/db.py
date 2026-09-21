@@ -97,6 +97,7 @@ class Job(Base):
     status: Mapped[str] = mapped_column(String, default="queued", index=True)
     config: Mapped[dict] = mapped_column(JSON)
     attempts: Mapped[int] = mapped_column(Integer, default=0)
+    resource_failures: Mapped[int] = mapped_column(Integer, default=0)
     lease_until: Mapped[int] = mapped_column(Integer, default=0)
     claim: Mapped[str | None] = mapped_column(String, nullable=True)
     created: Mapped[int] = mapped_column(Integer)

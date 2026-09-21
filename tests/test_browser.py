@@ -7,6 +7,86 @@ from quicker.worker import process_one
 from test_workflow import InvoiceAdapter
 
 
+def test_popup_backdrops_dismiss_only_outside_and_when_not_submitting(browser_url, auth, db, photo):
+    from test_workflow import upload
+
+    upload(auth, photo)
+    assert process_one(db, InvoiceAdapter)
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 1440, "height": 1000})
+        page.goto(browser_url)
+        page.get_by_label("Username", exact=True).fill("admin")
+        page.get_by_label("Password", exact=True).fill("test-password-12345")
+        page.get_by_role("button", name="Sign in", exact=True).click()
+        page.get_by_role("button", name="Upload & analyze", exact=True).first.click()
+        dialog = page.get_by_role("dialog", name="Upload & analyze")
+        dialog.get_by_role("heading").click()
+        expect(dialog).to_be_visible()
+        # Dragging from inside to outside must not be mistaken for a backdrop click.
+        heading = dialog.get_by_role("heading").bounding_box()
+        page.mouse.move(heading["x"] + 5, heading["y"] + 5)
+        page.mouse.down()
+        page.mouse.move(5, 5)
+        page.mouse.up()
+        expect(dialog).to_be_visible()
+        page.locator(".modal-overlay").click(position={"x": 5, "y": 5})
+        expect(dialog).to_have_count(0)
+        page.get_by_role("button", name="Upload & analyze", exact=True).first.click()
+        held = []
+        page.route("**/api/upload", lambda route: held.append(route))
+        page.locator("input[type=file]").set_input_files(
+            {"name": "waiting.png", "mimeType": "image/png", "buffer": photo}
+        )
+        dialog.get_by_role("button", name="Upload & analyze", exact=True).click()
+        expect(dialog.get_by_role("button", name="Close upload")).to_be_disabled()
+        page.locator(".modal-overlay").click(position={"x": 5, "y": 5})
+        expect(dialog).to_be_visible()
+        assert len(held) == 1
+        held[0].fulfill(status=503, json={"detail": "Test upload interruption"})
+        expect(dialog.get_by_role("button", name="Close upload")).to_be_enabled()
+        page.locator(".modal-overlay").click(position={"x": 5, "y": 5})
+        expect(dialog).to_have_count(0)
+        page.get_by_role("button", name="Details and source for Example Energy", exact=True).click()
+        page.get_by_role("dialog").get_by_role("heading").first.click()
+        expect(page.get_by_role("dialog")).to_be_visible()
+        page.locator(".drawer-overlay").click(position={"x": 5, "y": 5})
+        expect(page.get_by_role("dialog")).to_have_count(0)
+        page.get_by_role("navigation").get_by_role("button", name="Documents", exact=True).click()
+        page.get_by_role("button", name="Open document", exact=False).click()
+        page.locator(".modal-overlay").click(position={"x": 5, "y": 5})
+        expect(page.get_by_role("dialog")).to_have_count(0)
+        browser.close()
+
+
+def test_browser_model_outage_retry_and_recovery(browser_url, auth, db, photo):
+    from quicker.analysis_status import heartbeat
+    from test_model_availability import Offline
+    from test_workflow import upload
+
+    upload(auth, photo)
+    assert process_one(db, Offline)
+    heartbeat(db, "test-worker", 0, 1)
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page(viewport={"width": 1440, "height": 1000})
+        page.goto(browser_url)
+        page.get_by_label("Username", exact=True).fill("admin")
+        page.get_by_label("Password", exact=True).fill("test-password-12345")
+        page.get_by_role("button", name="Sign in", exact=True).click()
+        panel = page.get_by_role("region", name="Document analysis status")
+        expect(panel).to_contain_text("Model connection: Offline")
+        expect(panel).to_contain_text("Next recovery check after")
+        page.get_by_role("navigation").get_by_role("button", name="Documents", exact=True).click()
+        expect(page.locator(".document-card")).to_contain_text("Model server is offline")
+        panel.get_by_role("button", name="Retry now", exact=True).click()
+        expect(panel).to_contain_text("Retry requested")
+        assert process_one(db, InvoiceAdapter)
+        expect(page.locator(".document-card .badge")).to_have_text("Analysis complete", timeout=10000)
+        expect(panel).not_to_contain_text("None recorded yet", timeout=10000)
+        browser.close()
+
+
 def test_browser_requests_entry_and_displays_verified_result(browser_url, auth, db, tmp_path):
     from quicker_client.operations import Operations
     from test_desktop_operations import FILE, ApiCompanion, FakeQuicken, candidate
@@ -313,7 +393,7 @@ def test_browser_analysis_waiting_status_and_live_document_progress(browser_url,
         page.get_by_role("button", name="Sign in", exact=True).click()
         panel = page.get_by_role("region", name="Document analysis status")
         expect(panel).to_contain_text("Worker: No recent heartbeat")
-        expect(panel).to_contain_text("Model connection: Needs attention")
+        expect(panel).to_contain_text("Model connection: Unreachable")
         page.get_by_role("navigation").get_by_role("button", name="Documents", exact=True).click()
         expect(page.locator(".document-card .badge")).to_have_text("Waiting for analysis")
         expect(page.locator(".document-card")).to_contain_text("start automatically")

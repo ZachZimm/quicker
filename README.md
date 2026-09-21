@@ -89,9 +89,11 @@ sign-in. Restart the server after installing this change.
    queue counts, and the saved model connection's status. Worker heartbeats expire
    after 15 seconds; the model-server check is cached for 30 seconds and sends no
    images or inference requests. The vision check in Settings also tests image support.
-   Restart both the server and worker after installing this status-reporting change.
-   The worker records attempts and automatically retries failures up to three
-   attempts. **Analyze again** retries a completed or failed document using current settings.
+   Restart both the server and worker after updating; startup applies database migrations.
+   Temporary model outages leave documents queued and resume automatically, without
+   spending document-analysis attempts. Invalid output has up to three attempts;
+   invalid request settings require intervention. **Analyze again** retries a completed
+   or failed document using current settings, or updates a waiting job with older settings.
    Waiting documents show retry timing, worker availability, or a busy queue.
    A job uses the model settings revision saved when it was queued. Group only
    as many pages as fit the configured model's context. A truncated response is
@@ -135,6 +137,46 @@ Catalog assignments from extraction are suggestions. Required dates, valid
 catalog names, exact amounts, and duplicate acknowledgement are enforced by the
 server at approval time. The model can still make reading mistakes; review the
 source before approval. No model output can initiate Quicken entry.
+
+## Model availability and recovery
+
+Uploads, document storage, existing transaction review, and Quicken synchronization
+operate independently of model availability. Offline connections, timeouts,
+model loading and overload defer analysis automatically. The shared cooldown is
+stored in the database per endpoint, model and credentials. Delays grow from
+30 seconds to one, two and four minutes, then cap at five minutes. A longer
+server-provided `Retry-After` is honored. After a cooldown, one document checks
+recovery before other waiting documents proceed; expired worker claims remain
+recoverable after a restart.
+
+The analysis panel shows the waiting reason, next recovery check, and last
+successful analysis for the configured model. **Retry now** advances local
+cooldowns for waiting jobs, while respecting server-requested delays and active
+recovery checks. It does not revive failed documents. **Analyze again** creates
+a new attempt using current settings, preserving edits, removed transactions,
+and the comparison flow for missing transactions. Existing jobs retain their
+saved model settings until explicitly updated.
+
+Bonsai receives a lightweight health check before analysis to detect loading
+or an unavailable model. Health does not guarantee that the next inference will
+fit in GPU memory. A memory error from health keeps documents waiting without
+blaming a document. Three memory failures during inference for the same document
+stop that job with an explanation to free memory or reduce pages/context before
+trying again. Authentication errors, unsupported requests, and explicit context
+capacity errors stop immediately. Invalid transaction JSON retains bounded retries.
+Raw provider errors are never saved or shown; only recognized failure reasons
+and sanitized messages are retained. Repeated availability failures update the
+current state instead of growing document analysis history indefinitely.
+
+Concurrency still defaults to one. Quicker does not stop other GPU workloads,
+change Bonsai's resource allocation, or silently lower extraction quality to fit
+a request. Keeping the model host running or restarting it after resources become
+available remains the model host's responsibility.
+
+Web dialogs can be dismissed with their close button, Escape, or a click on the
+background. Clicking inside or dragging from inside to outside does not dismiss
+them. Uploads and account submissions keep the existing disabled-close behavior
+until the request completes.
 
 ## Quicken export synchronization
 

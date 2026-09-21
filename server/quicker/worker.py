@@ -5,19 +5,21 @@ from uuid import uuid4
 
 from sqlalchemy import and_, or_, select
 
+from . import model_availability
 from .analysis_status import heartbeat
 from .catalog import catalog
 from .contracts import ModelConfig
 from .db import Candidate, Database, Document, ExtractionAttempt, Job
 from .documents import model_settings, pages_for, prepare_image
 from .extraction import ModelError, VisionAdapter
+from .model_endpoint import ModelUnavailable, PermanentModelError
 from .review import create_candidates, proposals
 
 
 def process_one(db, adapter_factory=VisionAdapter):
     now = int(time.time())
     with db.write() as session:
-        job = session.scalar(
+        eligible = session.scalars(
             select(Job)
             .where(
                 or_(
@@ -26,26 +28,38 @@ def process_one(db, adapter_factory=VisionAdapter):
                 )
             )
             .order_by(Job.created)
-            .limit(1)
         )
+        job = None
+        for candidate in eligible:
+            config = ModelConfig.model_validate(candidate.config)
+            pages = [(db.blobs / p.sha256) for p in pages_for(session, candidate.document_id)]
+            claim = str(uuid4())
+            # One transcription request, one visual exclusion check per page, plus readiness.
+            lease_until = now + config.timeout * (1 + len(pages)) + 120
+            generation = model_availability.acquire(session, config, claim, lease_until, now)
+            if generation is not None:
+                job = candidate
+                break
         if not job:
             return False
-        config = ModelConfig.model_validate(job.config)
-        job.status, job.claim = "running", str(uuid4())
+        job.status, job.claim = "running", claim
         job.attempts += 1
         session.get(Document, job.document_id).status = "extracting"
         job_id, doc_id, claim = job.id, job.document_id, job.claim
-        pages = [(db.blobs / p.sha256) for p in pages_for(session, doc_id)]
-        # One transcription request plus a visual exclusion check per page.
-        job.lease_until = now + config.timeout * (1 + len(pages)) + 120
+        job.lease_until = lease_until
         ref = catalog(session)
     result = None
     error = None
+    failure = None
     try:
-        result = adapter_factory(config).extract([prepare_image(p, config.image_limit) for p in pages], ref)
+        adapter = adapter_factory(config)
+        if hasattr(adapter, "ready"):
+            adapter.ready()
+        result = adapter.extract([prepare_image(p, config.image_limit) for p in pages], ref)
         if any(r.page > len(pages) for r in result.transactions):
             raise ModelError("Model referenced a page that is not in this document")
     except Exception as exc:  # noqa: BLE001 - persist failures at the worker job boundary
+        failure = exc
         error = (
             str(exc)
             if isinstance(exc, ModelError)
@@ -56,6 +70,23 @@ def process_one(db, adapter_factory=VisionAdapter):
         if job.claim != claim:
             return True  # An expired worker must never publish over a newer claim.
         doc = session.get(Document, doc_id)
+        if isinstance(failure, ModelUnavailable):
+            model_availability.unavailable(session, config, failure, claim)
+            if failure.reason == "memory" and failure.document_request:
+                job.resource_failures += 1
+            if job.resource_failures < 3:
+                # An outage is not a failed document attempt. Store only the latest
+                # availability error, so an overnight outage cannot grow history forever.
+                job.attempts = max(0, job.attempts - 1)
+                job.status, doc.status, doc.error = "queued", "queued", error
+                job.available = 0  # Shared endpoint cooldown controls the retry.
+                return True
+            failure = PermanentModelError(
+                "Analysis of this document repeatedly ran out of memory. Free memory or reduce pages/context, then Analyze again."
+            )
+            error = str(failure)
+        else:
+            model_availability.completed(session, config, generation, claim, success=not error)
         payload = {"error": error} if error else result.model_dump(mode="json")
         has_rows = session.scalar(select(Candidate.id).where(Candidate.document_id == doc_id).limit(1))
         if not error and has_rows:
@@ -71,7 +102,9 @@ def process_one(db, adapter_factory=VisionAdapter):
             )
         )
         if error:
-            job.status = "queued" if job.attempts < 3 else "failed"
+            job.status = (
+                "queued" if job.attempts < 3 and not isinstance(failure, PermanentModelError) else "failed"
+            )
             job.available = int(time.time()) + 15 * job.attempts
             doc.status = "queued" if job.status == "queued" else "failed"
             doc.error = error

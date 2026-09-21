@@ -6,7 +6,10 @@ import time
 import httpx
 from sqlalchemy import select
 
+from . import model_availability
+from .contracts import ModelConfig
 from .db import Job, Setting
+from .model_endpoint import ModelError, ModelUnavailable, check_bonsai_ready, check_response
 
 HEARTBEAT_TTL = 15
 
@@ -44,7 +47,11 @@ def worker_status(session):
         "queue": {
             "waiting": sum(j.status == "queued" for j in jobs),
             "analyzing": sum(j.status == "running" for j in jobs),
-            "retrying": sum(j.status == "queued" and j.available > now for j in jobs),
+            "retrying": sum(
+                j.status == "queued" and (
+                    j.available > now or bool(model_availability.status(session, ModelConfig.model_validate(j.config))["reason"])
+                ) for j in jobs
+            ),
         },
     }
 
@@ -76,12 +83,19 @@ class ModelConnection:
                     ):
                         raise ValueError("Unexpected models response")
                     state, message = "connected", "Model server is reachable."
+                    if check_bonsai_ready(config):
+                        message = "Model is loaded. Inference capacity is checked when analysis runs."
                 elif response.status_code in (401, 403):
                     state, message = "unreachable", "Model server rejected authentication. Check the saved API key."
                 elif response.status_code == 404:
                     state, message = "unknown", "This endpoint does not support the connection check. Analysis may still work."
                 else:
-                    state, message = "unreachable", f"Model server returned HTTP {response.status_code}."
+                    check_response(response)
+                    state, message = "unknown", "Model server returned an unsupported response."
+            except ModelUnavailable as exc:
+                state, message = exc.reason, str(exc)
+            except ModelError as exc:
+                state, message = "configuration_error", str(exc)
             except httpx.HTTPError:
                 state, message = "unreachable", "Cannot reach the model server. Check that it is running and the saved connection settings are correct."
             except (ValueError, TypeError):
