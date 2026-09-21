@@ -127,6 +127,26 @@ def test_manual_session_keeps_quicken_foreground(windows):
     windows.gui.SetForegroundWindow.assert_not_called()
 
 
+def test_focus_restoration_waits_for_async_activation(windows, monkeypatch, caplog):
+    windows.state.foreground = 10
+    windows.gui.SetForegroundWindow.side_effect = None
+    monkeypatch.setattr(desktop.time, "sleep", lambda _: setattr(windows.state, "foreground", 20))
+    windows.adapter._restore_foreground(20, (20, 20))
+    assert windows.state.foreground == 20
+    windows.gui.SetForegroundWindow.assert_called_once_with(20)
+    assert not caplog.records
+
+
+def test_focus_restoration_does_not_retry_after_async_app_switch(windows, monkeypatch, caplog):
+    windows.state.foreground = 10
+    windows.gui.SetForegroundWindow.side_effect = None
+    monkeypatch.setattr(desktop.time, "sleep", lambda _: setattr(windows.state, "foreground", 30))
+    windows.adapter._restore_foreground(20, (20, 20))
+    assert windows.state.foreground == 30
+    windows.gui.SetForegroundWindow.assert_called_once_with(20)
+    assert not caplog.records
+
+
 def test_deferred_session_never_takes_focus(windows):
     windows.adapter.ready.side_effect = desktop.DesktopUnavailable("fullscreen")
     with (

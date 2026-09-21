@@ -17,8 +17,8 @@ The current export changes retain the 15-minute interval, defer background
 exports while the foreground window covers its monitor, and restore the previous
 application after automatic exports. Restoration respects user input, application
 switches, and closed windows. Windows may refuse a focus change; failures are
-logged. These changes have automated coverage but still need native Windows
-verification.
+logged. Single-monitor native Windows verification is recorded below; the broader
+acceptance checks remain outstanding.
 
 ## Startup and window behavior
 
@@ -158,6 +158,36 @@ the application's lifecycle.
 - An update preserves pairing, settings, owner identity, and journals.
 
 ## Windows validation and deployment
+
+### September 20, 2026 validation
+
+Validated upstream `48d8b5e` on Windows 11 Home, build 26200, with English Quicken
+Classic Business & Personal 27.1.69.29 and one monitor. A dedicated foreground
+test window exercised normal, maximized (taskbar visible), and fullscreen modes.
+After the actual 60-second idle threshold, fullscreen deferred a background
+session without changing focus. A controlled session failure and a complete native
+QIF export both restored the previous application. These checks only exported
+data; they did not import transactions or create accounts.
+
+Native testing found that Windows can complete foreground activation asynchronously.
+The client now observes the result for up to 250 milliseconds before warning,
+without retrying activation or overriding another foreground application. Tests
+cover delayed activation and an intervening application switch. The backup test
+now checks POSIX permission bits only on POSIX systems; Windows does not expose
+ACL permissions through those bits.
+
+After rebuilding the web assets, the full Windows suite passed (222 tests), along
+with the two added activation regressions. Ruff, TypeScript, the Vite production
+build, and Windows packaging passed. Multi-monitor/fullscreen-game, lock/wake,
+overnight, startup, and tray-lifecycle acceptance checks are not established by
+this run; the proposed lifecycle work above remains unimplemented.
+
+Rebuilt and restarted `client/dist/Quicker/Quicker.exe` with existing pairing,
+configuration and journals preserved. The packaged client connected to the
+deployed Linux server at `100.77.107.36:8999` and completed a server-requested
+refresh: `Fresh Quicken export verified`, reference generation 11. No account
+requests or entry operations remained pending. These follow-up changes affect
+Windows focus handling, tests and this record; they require no Linux restart.
 
 Earlier native testing covered English Quicken Classic Business & Personal
 27.1.69.29, complete exports, transaction entry and Bank account creation using a

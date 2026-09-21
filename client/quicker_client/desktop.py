@@ -232,6 +232,16 @@ class WindowsQuicken:
             ):
                 return
             win32gui.SetForegroundWindow(window)
+            # Activation of another input queue can complete asynchronously.
+            # Observe briefly without retrying or overriding a new foreground app.
+            deadline = time.monotonic() + 0.25
+            while time.monotonic() < deadline:
+                current = win32gui.GetForegroundWindow()
+                if current == window:
+                    return
+                if not current or win32process.GetWindowThreadProcessId(current)[1] != self.main.process_id():
+                    return
+                time.sleep(0.01)
             if win32gui.GetForegroundWindow() != window:
                 logger.warning("Windows did not restore the application active before the automatic export")
         except Exception:

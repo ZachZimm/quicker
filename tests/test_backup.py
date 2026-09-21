@@ -1,3 +1,4 @@
+import os
 import sys
 
 from fastapi.testclient import TestClient
@@ -19,7 +20,9 @@ def test_backup_restores_database_and_originals(auth, db, photo, tmp_path, monke
     monkeypatch.setattr(sys, "argv", ["quicker", "backup", str(target)])
     main()
     assert (target / "private-profile.json").read_bytes() == profile_path().read_bytes()
-    assert (target / "private-profile.json").stat().st_mode & 0o777 == 0o600
+    # Windows chmod only controls the read-only flag; POSIX mode bits are not ACLs.
+    if os.name == "posix":
+        assert (target / "private-profile.json").stat().st_mode & 0o777 == 0o600
     restored = Database(target)
     restored.migrate()
     with restored.session() as session:
